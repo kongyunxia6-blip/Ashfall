@@ -415,6 +415,17 @@ namespace Ashfall
             return curDurability[x, y];
         }
 
+        /// <summary>
+        /// DEV-001：某格满耐久（耐久上限，只读）。&gt;=1=实心格满耐久；-1=空格/未初始化。
+        /// 这是耐久的单一真相源：支持 SetTile 的实例级耐久覆盖（测试/特殊 Block），
+        /// 调用方（如 DrillVehicle 的 HUD 进度）应以此为准，而非共享 SO 的 digHits。
+        /// </summary>
+        public int GetMaxDurability(int x, int y)
+        {
+            if (maxDurability == null || !InBounds(x, y)) return -1;
+            return maxDurability[x, y];
+        }
+
         /// <summary>DEV-001：某格是否处于「崩碎中」状态（耐久归零、等待移除）。</summary>
         public bool IsBreaking(int x, int y)
         {

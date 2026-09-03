@@ -586,7 +586,10 @@ namespace Ashfall
                 isDigging = true;
             }
 
-            digTargetTime = Mathf.Max(1, tdef.digHits);
+            // DEV-001：总耐久以 DigGrid 的实例级 max 为准（单一真相源），
+            // 而非共享 SO 的 digHits——测试/特殊 Block 可能被 SetTile 覆盖为不同耐久。
+            int instanceMax = grid.GetMaxDurability(cell.x, cell.y);
+            digTargetTime = instanceMax >= 1 ? instanceMax : Mathf.Max(1, tdef.digHits);
 
             if (grid.HitBlock(cell.x, cell.y, out var dug))
             {
