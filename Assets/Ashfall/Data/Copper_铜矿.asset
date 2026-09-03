@@ -24,3 +24,4 @@ MonoBehaviour:
   isSolid: 1
   isHazard: 0
   hazardDamage: 0
+  dropsIronOre: 0

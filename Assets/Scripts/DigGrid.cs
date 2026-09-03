@@ -37,6 +37,14 @@ namespace Ashfall
         Tile solidTile;
         Grid layoutGrid;
 
+        [Header("DEV-001 耐久 V1")]
+        [Tooltip("背景层 Tilemap（可选）。若指定，挖穿前景后露出背景（背景 Tilemap sortingOrder 应低于前景）。" +
+                 "测试场景 BlockV1Test.unity 用它来显示 Dirt 背景")]
+        public Tilemap backgroundTilemap;
+
+        /// <summary>DEV-001：每格当前耐久（旁路数组，跟 grid 平行）。0=崩碎；-1=空格/未初始化；&gt;0=剩余击数。</summary>
+        int[,] curDurability;
+
         /// <summary>每格的世界尺寸（取自 Grid 组件，默认 1）</summary>
         Vector3 CellSize => layoutGrid != null ? layoutGrid.cellSize : Vector3.one;
 
@@ -77,6 +85,7 @@ namespace Ashfall
             }
 
             grid = new TileDefinition[width, depth];
+            curDurability = new int[width, depth];
             int center = width / 2;
 
             for (int y = 0; y < depth; y++)
@@ -110,6 +119,14 @@ namespace Ashfall
                 }
             }
 
+            // DEV-001：初始化当前耐久（实心格 = digHits，空格 = -1）
+            for (int y = 0; y < depth; y++)
+                for (int x = 0; x < width; x++)
+                {
+                    var def = grid[x, y];
+                    curDurability[x, y] = (def != null && def.isSolid) ? def.digHits : -1;
+                }
+
             RefreshAll();
         }
 
@@ -128,6 +145,9 @@ namespace Ashfall
             var tile = ScriptableObject.CreateInstance<Tile>();
             tile.sprite = sprite;
             tile.name = "Ashfall_SolidTile";
+            // DEV-001：Tile 默认 flags=LockColor 会让 SetTile 后 cell 的 SetColor 被忽略，
+            // 显式改 None 才能让 RefreshTile 的裂纹阶段调灰生效。
+            tile.flags = TileFlags.None;
             return tile;
         }
 
@@ -155,7 +175,14 @@ namespace Ashfall
 
             tilemap.SetTile(cell, solidTile);
             tilemap.SetTileFlags(cell, TileFlags.None);
-            tilemap.SetColor(cell, def.color);
+
+            // DEV-001：按当前裂纹阶段调灰（完整=def.color → 崩碎=黑）
+            int max = Mathf.Max(1, def.digHits);
+            int cur = (curDurability != null && InBounds(x, y)) ? curDurability[x, y] : max;
+            if (cur <= 0 || cur > max) cur = max;
+            int stage = GetCrackStage(cur, max);
+            float dark = stage / 3f;
+            tilemap.SetColor(cell, Color.Lerp(def.color, Color.black, dark * 0.55f));
         }
 
         // ---------- 查询 ----------
@@ -255,5 +282,82 @@ namespace Ashfall
             // 连锁检查更上方
             TryRockFall(x, above);
         }
+
+        // ---------- DEV-001：耐久 / 裂纹 / 崩碎 ----------
+
+        /// <summary>
+        /// DEV-001：单格受击。耐久 -1，未崩碎时刷新裂纹视觉；崩碎时走 Dig() 统一挖穿路径
+        /// （含落石、OnTileDug）。返回 true 表示命中了实心格，dug 非空表示崩碎产出。
+        /// 多次调用 HitBlock 是"击打多次"的意思——计数由 DigGrid 承载，玩家侧不再持有进度。
+        /// </summary>
+        public bool HitBlock(int x, int y, out TileDefinition dug)
+        {
+            dug = null;
+            if (!InBounds(x, y)) return false;
+
+            var def = GetTile(x, y);
+            if (def == null || !def.isSolid) return false;
+
+            if (curDurability == null) Generate();
+            if (curDurability == null) return false;
+
+            int cur = curDurability[x, y];
+            if (cur <= 0) cur = Mathf.Max(1, def.digHits);   // 防御性初始化
+            cur--;
+            curDurability[x, y] = cur;
+
+            if (cur <= 0)
+            {
+                // 崩碎：走 Dig() 统一挖穿路径（grid→empty + RefreshTile + 落石 + OnTileDug）
+                return Dig(x, y, out dug);
+            }
+
+            // 未崩碎：只刷新视觉
+            RefreshTile(x, y);
+            return true;
+        }
+
+        /// <summary>DEV-001：某格当前耐久（剩余击数）。0 表示崩碎；-1 表示空格；正数表示剩余。</summary>
+        public int GetDurability(int x, int y)
+        {
+            if (curDurability == null || !InBounds(x, y)) return -1;
+            return curDurability[x, y];
+        }
+
+        /// <summary>
+        /// DEV-001：裂纹阶段（0=完整 1=裂纹1 2=裂纹2 3=裂纹3/崩碎临界）。
+        /// 按剩余耐久比例分档：≥100% 完整 / ≥75% 裂纹1 / ≥50% 裂纹2 / ≥25% 裂纹3；0 已崩碎（由调用方判定）。
+        /// max=4 时完整轨迹：4(完整)→3(裂纹1)→2(裂纹2)→1(裂纹3)→0(崩碎→消失)。
+        /// </summary>
+        public static int GetCrackStage(int cur, int max)
+        {
+            if (max <= 0 || cur >= max) return 0;
+            if (cur >= Mathf.CeilToInt(max * 0.75f)) return 1;
+            if (cur >= Mathf.CeilToInt(max * 0.50f)) return 2;
+            return 3;
+        }
+
+        /// <summary>
+        /// DEV-001：外部设置某格的方块（测试场景搭建用，会同步初始化耐久并刷新渲染）。
+        /// </summary>
+        public void SetTile(int x, int y, TileDefinition def)
+        {
+            if (!InBounds(x, y)) return;
+            if (curDurability == null) Generate();
+            if (grid == null) return;
+
+            grid[x, y] = def;
+            if (curDurability != null)
+                curDurability[x, y] = (def != null && def.isSolid) ? Mathf.Max(1, def.digHits) : -1;
+            RefreshTile(x, y);
+        }
+
+#if UNITY_EDITOR
+        /// <summary>DEV-001：编辑器下强制重新生成（BlockV1Builder 用）。Play 模式下 Awake 也会自动调。</summary>
+        public void RegenerateFromDatabase()
+        {
+            Generate();
+        }
+#endif
     }
 }

@@ -50,5 +50,10 @@ namespace Ashfall
 
         [Tooltip("危险伤害（每秒）")]
         [Min(0)] public int hazardDamage = 0;
+
+        [Header("DEV-001 预留")]
+        [Tooltip("铁矿专属掉落事件预留：true 时崩碎后会走铁矿特殊掉落路径（IronOreDropHook 接）。" +
+                 "普通岩 / 其他矿石保持 false，走通用 OnTileDug 流程")]
+        public bool dropsIronOre = false;
     }
 }

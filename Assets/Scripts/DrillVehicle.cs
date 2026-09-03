@@ -578,25 +578,29 @@ namespace Ashfall
                 return;
             }
 
-            // 多击进度：目标格变了 → 重置；digTargetTime = 该格总击打次数，digProgress = 已击次数。
-            // （复用原进度条字段，HUD 的 DigProgress01 直接显示「已击/总击」进度）
+            // DEV-001：耐久由 DigGrid 承载。玩家每次点击 = 调 HitBlock 一次。
+            // digProgress/digTargetTime 保留给 HUD 显示，但数据源 = DigGrid.curDurability
             if (!isDigging || cell != digCell)
             {
                 digCell = cell;
-                digTargetTime = Mathf.Max(1, tdef.digHits);
-                digProgress = 0f;
                 isDigging = true;
             }
 
-            digProgress += 1f;                                  // 这一击
+            digTargetTime = Mathf.Max(1, tdef.digHits);
 
-            if (digProgress >= digTargetTime)
+            if (grid.HitBlock(cell.x, cell.y, out var dug))
             {
-                grid.Dig(cell.x, cell.y, out var _);            // 打满次数 → 挖穿（进舱走 OnTileDug）
-            }
-            else if (digTargetTime > 1f)
-            {
-                ShowMessageThrottled($"{tdef.displayName}：{Mathf.RoundToInt(digProgress)}/{Mathf.RoundToInt(digTargetTime)} 击", 0.35f);
+                int curAfter = grid.GetDurability(cell.x, cell.y);
+                digProgress = digTargetTime - Mathf.Max(0, curAfter);   // 已击数 = max - cur
+
+                if (dug != null)
+                {
+                    // 崩碎：走 OnTileDug → HandleTileDug（含背包添加）
+                }
+                else if (digTargetTime > 1f)
+                {
+                    ShowMessageThrottled($"{tdef.displayName}：{Mathf.RoundToInt(digProgress)}/{Mathf.RoundToInt(digTargetTime)} 击", 0.35f);
+                }
             }
         }
 
