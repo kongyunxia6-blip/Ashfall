@@ -25,3 +25,4 @@ MonoBehaviour:
   isHazard: 0
   hazardDamage: 0
   dropId: iron_ore
+  visualProfile: {fileID: 11400000, guid: 9a6bf1b1e111f2349bb14562660f37b4, type: 2}

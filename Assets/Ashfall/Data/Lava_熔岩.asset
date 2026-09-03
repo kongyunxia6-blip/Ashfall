@@ -25,3 +25,4 @@ MonoBehaviour:
   isHazard: 1
   hazardDamage: 25
   dropId: 
+  visualProfile: {fileID: 0}

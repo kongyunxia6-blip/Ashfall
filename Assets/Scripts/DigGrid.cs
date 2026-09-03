@@ -37,6 +37,13 @@ namespace Ashfall
         Tile solidTile;
         Grid layoutGrid;
 
+        /// <summary>
+        /// DEV-002：Sprite → Tile 缓存。Tilemap 每个 cell 需要一个带该 Sprite 的 Tile 实例，
+        /// 按 Sprite 复用可避免每格新建 Tile 对象。
+        /// </summary>
+        readonly System.Collections.Generic.Dictionary<Sprite, Tile> spriteTileCache =
+            new System.Collections.Generic.Dictionary<Sprite, Tile>();
+
         [Header("DEV-001 耐久 V1")]
         [Tooltip("背景层 Tilemap（可选）。若指定，挖穿前景后露出背景（背景 Tilemap sortingOrder 应低于前景）。" +
                  "测试场景 BlockV1Test.unity 用它来显示 Dirt 背景")]
@@ -76,6 +83,12 @@ namespace Ashfall
         /// 配合 breakDuration 的延迟移除窗口播放完整动画。
         /// </summary>
         public event Action<Vector2Int, TileDefinition> OnBlockBreakStart;
+
+        /// <summary>
+        /// DEV-002：某格被成功命中（耐久 -1 且未崩碎）时触发（格子坐标, 方块定义）。
+        /// 供表现层做单格命中反馈（局部抖动 / 闪亮 / 碎屑 / 音效）。崩碎那一击走 OnBlockBreakStart，不重复触发本事件。
+        /// </summary>
+        public event Action<Vector2Int, TileDefinition> OnBlockHit;
 
         public int Width => width;
         public int Depth => depth;
@@ -196,21 +209,50 @@ namespace Ashfall
                 return;
             }
 
-            tilemap.SetTile(cell, solidTile);
-            tilemap.SetTileFlags(cell, TileFlags.None);
-
-            // DEV-001：按当前裂纹阶段调灰（完整=def.color → 崩碎=黑）。
+            // DEV-001：裂纹阶段由「当前耐久 / 满耐久」唯一决定（数据层单一真相源）。
             // max 取该格实例级满耐久（测试可覆盖），而非共享 SO 的 digHits。
             int max = (maxDurability != null && InBounds(x, y) && maxDurability[x, y] >= 1)
                 ? maxDurability[x, y] : Mathf.Max(1, def.digHits);
             int cur = (curDurability != null && InBounds(x, y)) ? curDurability[x, y] : max;
             int stage;
             if (cur <= 0)
-                stage = 3;   // 崩碎（Break）状态：最暗档，与「裂纹3」同档视觉（V1 无独立崩碎美术）
+                stage = 3;   // 崩碎（Break）状态：与「裂纹3」同档（崩碎动画由表现层 OnBlockBreakStart 播放）
             else
                 stage = GetCrackStage(Mathf.Min(cur, max), max);
-            float dark = stage / 3f;
-            tilemap.SetColor(cell, Color.Lerp(def.color, Color.black, dark * 0.55f));
+
+            // DEV-002：优先用 visualProfile 的 Sprite（真正 Sprite 替换路径）；
+            // 无 profile / 无对应 stage Sprite 时，fallback 到 DEV-001 的「纯色方块 + 调暗」。
+            var profile = def != null ? def.visualProfile : null;
+            Sprite spr = (profile != null) ? profile.GetStageSprite(stage) : null;
+
+            if (spr != null)
+            {
+                tilemap.SetTile(cell, GetTileForSprite(spr));
+                tilemap.SetTileFlags(cell, TileFlags.None);
+                tilemap.SetColor(cell, Color.white);   // Sprite 自带裂纹视觉，不再调色
+            }
+            else
+            {
+                tilemap.SetTile(cell, solidTile);
+                tilemap.SetTileFlags(cell, TileFlags.None);
+                float dark = stage / 3f;
+                tilemap.SetColor(cell, Color.Lerp(def.color, Color.black, dark * 0.55f));
+            }
+        }
+
+        /// <summary>DEV-002：取（或创建）给定 Sprite 对应的 Tile 实例（按 Sprite 缓存复用）。</summary>
+        Tile GetTileForSprite(Sprite spr)
+        {
+            if (spriteTileCache.TryGetValue(spr, out var tile))
+                return tile;
+
+            tile = ScriptableObject.CreateInstance<Tile>();
+            tile.sprite = spr;
+            tile.name = "Ashfall_" + spr.name;
+            // Tile 默认 flags=LockColor 会忽略 cell SetColor；用 Sprite 时保留原色，但显式 None 保持行为一致。
+            tile.flags = TileFlags.None;
+            spriteTileCache[spr] = tile;
+            return tile;
         }
 
         // ---------- 查询 ----------
@@ -401,8 +443,9 @@ namespace Ashfall
                 return true;
             }
 
-            // 未崩碎：只刷新裂纹视觉
+            // 未崩碎：刷新裂纹视觉 + 单格命中反馈（DEV-002）
             RefreshTile(x, y);
+            OnBlockHit?.Invoke(new Vector2Int(x, y), def);
             return true;
         }
 
