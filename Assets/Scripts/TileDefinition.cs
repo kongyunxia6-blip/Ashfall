@@ -57,5 +57,10 @@ namespace Ashfall
                  "核心 Block 定义只携带一个通用字符串，不感知具体矿种；「掉什么 / 掉几个 / 概率 / 伴生物」由掉落系统按 id 查表决定。" +
                  "示例：\"iron_ore\"（铁矿残块）、\"copper_ore\"（铜矿残块）…… 新增矿种无需改动 DigGrid / DrillVehicle / TileDefinition 的核心挖掘逻辑。")]
         public string dropId = "";
+
+        [Header("DEV-002 表现")]
+        [Tooltip("视觉 profile（完整/裂纹1/2/3/崩碎帧的 Sprite）。空则 fallback 到 DEV-001 的纯色方块 + 裂纹调暗。" +
+                 "正式美术就绪后，在这里拖入对应 Sprite 资产即可替换，无需改代码。")]
+        public BlockVisualProfile visualProfile;
     }
 }
