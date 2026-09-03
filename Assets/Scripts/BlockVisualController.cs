@@ -79,8 +79,11 @@ namespace Ashfall
         void OnBlockHit(Vector2Int cell, TileDefinition def)
         {
             // 1) 极短闪亮（等价单格命中反馈，不整屏震动）
+            //    DEV-002 第二轮验收：优先用 profile.hitFlashDuration（秒）；
+            //    无 profile / 时长为 0 时再用 hitFlashFrames 帧数作为统一 fallback，避免两套配置打架。
             var profile = def != null ? def.visualProfile : null;
-            if (hitFlashFrames > 0)
+            bool flashEnabled = (profile != null && profile.hitFlashDuration > 0f) || hitFlashFrames > 0;
+            if (flashEnabled)
                 StartCoroutine(Co_HitFlash(cell, profile));
 
             // 2) 少量碎屑
@@ -170,13 +173,24 @@ namespace Ashfall
             Color original = grid.tilemap.GetColor(c);
             Color flash = (profile != null) ? profile.hitFlashColor : Color.white;
 
-            int frames = Mathf.Max(1, hitFlashFrames);
-            for (int i = 0; i < frames; i++)
+            if (profile != null && profile.hitFlashDuration > 0f)
             {
+                // 时长驱动：优先使用 profile.hitFlashDuration（秒），与 Inspector 配置一致
                 grid.tilemap.SetColor(c, Color.Lerp(original, flash, 0.65f));
-                yield return null;
+                yield return new WaitForSeconds(profile.hitFlashDuration);
+                grid.tilemap.SetColor(c, original);
             }
-            grid.tilemap.SetColor(c, original);
+            else
+            {
+                // fallback：帧数驱动（无 profile / 时长为 0 时的统一兜底）
+                int frames = Mathf.Max(1, hitFlashFrames);
+                for (int i = 0; i < frames; i++)
+                {
+                    grid.tilemap.SetColor(c, Color.Lerp(original, flash, 0.65f));
+                    yield return null;
+                }
+                grid.tilemap.SetColor(c, original);
+            }
         }
 
         // ---------- 碎屑 ----------
@@ -186,7 +200,7 @@ namespace Ashfall
             for (int i = 0; i < count; i++)
             {
                 var go = new GameObject("Debris");
-                go.transform.position = worldPos + (Vector3)(UnityEngine.Random.insideUnitCircle * 0.2f);
+                go.transform.position = (Vector3)worldPos + (Vector3)(UnityEngine.Random.insideUnitCircle * 0.2f);
                 go.transform.localScale = Vector3.one * UnityEngine.Random.Range(0.06f, 0.16f);
 
                 var sr = go.AddComponent<SpriteRenderer>();
@@ -197,7 +211,7 @@ namespace Ashfall
                 var rb = go.AddComponent<Rigidbody2D>();
                 rb.gravityScale = 4f;
                 float ang = UnityEngine.Random.Range(0f, Mathf.PI * 2f);
-                rb.velocity = new Vector2(Mathf.Cos(ang), Mathf.Sin(ang)) * UnityEngine.Random.Range(0.5f, 1f) * speed;
+                rb.linearVelocity = new Vector2(Mathf.Cos(ang), Mathf.Sin(ang)) * UnityEngine.Random.Range(0.5f, 1f) * speed;
                 rb.angularVelocity = UnityEngine.Random.Range(-360f, 360f);
 
                 StartCoroutine(Co_FadeDebris(go, sr, UnityEngine.Random.Range(0.25f, 0.5f)));
