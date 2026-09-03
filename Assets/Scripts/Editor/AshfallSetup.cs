@@ -40,7 +40,7 @@ namespace Ashfall.EditorTools
             //   1.0 1.2  1.5  1.9   2.2   2.6   3.0    3.5    4.5     （重量）
             //   12  33   87   210   409   846   1667   3143   8889    （单价÷重量）
             // 密度递增 ⇒ 满舱时「丢铁矿换钻石」永远是最优解，这正是 Motherload 的取舍手感。
-            var iron = MakeTile("Iron_铁矿", new Color(0.63f, 0.61f, 0.58f), 1, 0.30f, 12, true, false, 0, 1.0f);
+            var iron = MakeTile("Iron_铁矿", new Color(0.63f, 0.61f, 0.58f), 1, 0.30f, 12, true, false, 0, 1.0f, "iron_ore");
             var copper = MakeTile("Copper_铜矿", new Color(0.72f, 0.45f, 0.20f), 1, 0.35f, 40, true, false, 0, 1.2f);
             var silver = MakeTile("Silver_银矿", new Color(0.75f, 0.75f, 0.78f), 2, 0.40f, 130, true, false, 0, 1.5f);
             var gold = MakeTile("Gold_金矿", new Color(1f, 0.84f, 0f), 2, 0.45f, 400, true, false, 0, 1.9f);
@@ -84,7 +84,7 @@ namespace Ashfall.EditorTools
 
         static TileDefinition MakeTile(string name, Color color, int hardness, float drillTime,
                                        int value, bool isSolid, bool isHazard, int hazardDamage,
-                                       float weight = 1f)
+                                       float weight = 1f, string dropId = "")
         {
             string path = $"{DataFolder}/{name}.asset";
             var existing = AssetDatabase.LoadAssetAtPath<TileDefinition>(path);
@@ -98,6 +98,9 @@ namespace Ashfall.EditorTools
             tile.isSolid = isSolid;
             tile.isHazard = isHazard;
             tile.hazardDamage = hazardDamage;
+
+            // 通用掉落标识（DEV-001）：非空时挖穿由 BlockDropHook 按 id 派发掉落；空 = 无特殊掉落。
+            tile.dropId = dropId;
 
             // 重量只在 value > 0 的矿物上有意义（泥土/硬岩/熔岩不进背包）。
             // 每次重建都覆盖，保证 AshfallSetup 是数值的唯一来源。

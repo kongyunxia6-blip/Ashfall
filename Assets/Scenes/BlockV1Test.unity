@@ -1161,7 +1161,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: cedbf7580e79ef94cad8619d2e62ae66, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::Ashfall.IronOreDropHook
+  m_EditorClassIdentifier: Assembly-CSharp::Ashfall.BlockDropHook
   grid: {fileID: 175301662}
 --- !u!114 &1507309263
 MonoBehaviour:

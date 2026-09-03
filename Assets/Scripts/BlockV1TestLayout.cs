@@ -11,10 +11,11 @@ namespace Ashfall
     ///  因此布局必须在 Play 模式下、Awake 之后再次应用。本组件用 Start()（Awake 之后）做这件事。
     ///
     /// 挂在 DigGrid 同一物体上，Start() 时：
-    ///  1. 配置铁矿 digHits=4、普通岩 digHits=1（不同耐久）
-    ///  2. 配置铁矿 dropsIronOre=true（触发 IronOreDropHook）
-    ///  3. 用 SetTile 把 startY~startY+LayoutHeight-1、startX~startX+LayoutWidth-1 填成 5:1 混合布局
+    ///  1. 用 SetTile 的 durability 参数做「实例级耐久覆盖」：铁矿耐久=ironDigHits、普通岩=rockDigHits
+    ///  2. 把 startY~startY+LayoutHeight-1、startX~startX+LayoutWidth-1 填成 5:1 混合布局
     ///
+    /// 重要：本组件**不再**在 Play 期修改共享 TileDefinition ScriptableObject 的 digHits/dropId——
+    /// 测试耐久通过 SetTile 的实例级覆盖传入，避免主场景共享资产被运行时副作用污染。
     /// Editor 场景下不做事（Builder 已经填好了）。
     /// </summary>
     public class BlockV1TestLayout : MonoBehaviour
@@ -29,10 +30,10 @@ namespace Ashfall
         [Tooltip("铁矿占比 = 5/6，普通岩占 1/6")]
         public int ironEveryN = 6;
 
-        [Header("耐久配置（Play 时生效）")]
-        [Tooltip("铁矿 digHits（测试 6 态需要 ≥4）")]
+        [Header("实例级耐久（Play 时生效，不修改共享 SO）")]
+        [Tooltip("铁矿每格耐久（测试 6 态需要 ≥4）")]
         public int ironDigHits = 4;
-        [Tooltip("普通岩 digHits（1 击崩碎）")]
+        [Tooltip("普通岩每格耐久（1 击崩碎）")]
         public int rockDigHits = 1;
 
         TileDefinition ironDef;
@@ -57,11 +58,8 @@ namespace Ashfall
                 return;
             }
 
-            // 配置不同耐久（Editor 的 SetDirty 不会带入 Play 模式——SO 是共享资源，运行时也有效）
-            // 注意：SO 字段修改会影响所有场景。这里只改 digHits / dropsIronOre，不改颜色/价值。
-            ironDef.digHits = ironDigHits;
-            ironDef.dropsIronOre = true;
-            rockDef.digHits = rockDigHits;
+            // 注意：不改共享 SO（ironDef.digHits / dropId）。测试耐久用 SetTile 的 durability 参数
+            // 作为「实例级覆盖」传入，避免主场景共享资产被运行时副作用污染。
 
             int startX = grid.Width / 2 - layoutWidth / 2;
             int filled = 0;
@@ -74,13 +72,16 @@ namespace Ashfall
                     if (!grid.InBounds(x, y)) continue;
 
                     bool isIron = (lx + ly * layoutWidth) % ironEveryN != (ironEveryN - 1);
-                    grid.SetTile(x, y, isIron ? ironDef : rockDef);
+                    if (isIron)
+                        grid.SetTile(x, y, ironDef, ironDigHits);
+                    else
+                        grid.SetTile(x, y, rockDef, rockDigHits);
                     filled++;
                 }
             }
 
             Debug.Log($"[DEV-001] BlockV1TestLayout: 布局已应用（{filled} 格，y={startY}~{startY + layoutHeight - 1}，" +
-                      $"iron digHits={ironDef.digHits} dropsIronOre={ironDef.dropsIronOre}，rock digHits={rockDef.digHits}）");
+                      $"iron 耐久={ironDigHits}，rock 耐久={rockDigHits}；未修改共享 SO）");
         }
 
         TileDefinition FindByDisplayName(string name)

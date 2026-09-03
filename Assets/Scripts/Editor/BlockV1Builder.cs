@@ -13,9 +13,9 @@ namespace Ashfall.EditorTools
     /// 场景内容：
     ///  - 前景 Tilemap（方块）：12 列 × 4 行 = 48 格，其中 40 铁矿 + 8 普通岩（满足「连续破坏 ≥20」）
     ///  - 背景 Tilemap（Dirt）：整片填 Dirt 颜色，挖穿前景后露出
-    ///  - 铁矿 digHits=4（完整→裂纹1→裂纹2→裂纹3→崩碎→消失 6 态）
-    ///  - 普通岩 digHits=1（1 击崩碎）
-    ///  - 铁矿 dropsIronOre=true，触发 IronOreDropHook 日志
+    ///  - 铁矿实例耐久 4（完整→裂纹1→裂纹2→裂纹3→崩碎→消失 6 态）
+    ///  - 普通岩实例耐久 1（1 击崩碎）
+    ///  - 铁矿 dropId="iron_ore"，触发 BlockDropHook 日志
     ///
     /// 玩家从地表坑口下潜，按 S+左键 向下挖掘。
     /// </summary>
@@ -47,15 +47,9 @@ namespace Ashfall.EditorTools
                 return;
             }
 
-            // ---- 1. 配置铁矿与普通岩的不同耐久 ----
-            // 铁矿：digHits=4（完整→裂纹1→裂纹2→裂纹3→崩碎→消失 6 态），dropsIronOre=true
-            iron.digHits = 4;
-            iron.dropsIronOre = true;
-            EditorUtility.SetDirty(iron);
-
-            // 普通岩：digHits=1（1 击崩碎）
-            hardRock.digHits = 1;
-            EditorUtility.SetDirty(hardRock);
+            // ---- 1. 不再修改共享 SO 的 digHits/dropId ----
+            // 测试耐久改为「实例级覆盖」，在下方 SetTile 时通过 durability 参数传入；
+            // 铁矿的 dropId="iron_ore" 已持久化在 Iron_铁矿.asset 里，主场景资产不被本 Builder 污染。
 
             // ---- 2. 新建场景 ----
             if (!AssetDatabase.IsValidFolder(SceneFolder))
@@ -127,17 +121,17 @@ namespace Ashfall.EditorTools
                     bool isIron = (lx + ly * LayoutWidth) % 6 != 5;   // 每 6 格 1 个普通岩
                     if (isIron && ironLeft > 0)
                     {
-                        digGrid.SetTile(x, y, iron);
+                        digGrid.SetTile(x, y, iron, 4);      // 铁矿实例耐久 4
                         ironLeft--;
                     }
                     else if (rockLeft > 0)
                     {
-                        digGrid.SetTile(x, y, hardRock);
+                        digGrid.SetTile(x, y, hardRock, 1);  // 普通岩实例耐久 1
                         rockLeft--;
                     }
                     else
                     {
-                        digGrid.SetTile(x, y, iron);   // 兜底
+                        digGrid.SetTile(x, y, iron, 4);      // 兜底
                     }
                 }
             }
@@ -201,8 +195,8 @@ namespace Ashfall.EditorTools
             gm.usePlayerStartAsSpawn = true;
             gm.startingCash = 100;
 
-            // DEV-001：铁矿掉落事件钩子（挂在 GameManager 上）
-            var hook = gmGo.AddComponent<IronOreDropHook>();
+            // DEV-001：通用掉落派发器（挂在 GameManager 上，按 dropId 派发）
+            var hook = gmGo.AddComponent<BlockDropHook>();
             hook.grid = digGrid;
 
             // ---- 9. 地表基地触发区 ----
@@ -256,8 +250,8 @@ namespace Ashfall.EditorTools
             Debug.Log($"[DEV-001] Block 测试场景已搭建：{ScenePath}\n" +
                       $"布局：{LayoutWidth}×{LayoutHeight} = {LayoutWidth * LayoutHeight} 格（{IronCount} 铁矿 + {RockCount} 普通岩），" +
                       $"y={startY}~{startY + LayoutHeight - 1}，x={startX}~{startX + LayoutWidth - 1}\n" +
-                      "铁矿 digHits=4（完整→裂纹1→裂纹2→裂纹3→崩碎→消失 6 态），普通岩 digHits=1\n" +
-                      "铁矿 dropsIronOre=true → IronOreDropHook 会在崩碎时打 [DEV-001] 日志\n" +
+                      "铁矿实例耐久=4（完整→裂纹1→裂纹2→裂纹3→崩碎→消失 6 态），普通岩实例耐久=1\n" +
+                      "铁矿 dropId=\"iron_ore\" → BlockDropHook 会在挖穿时打 [DEV-001] 日志\n" +
                       "操作：按 S+左键 向下挖掘，观察裂纹视觉与崩碎后 Dirt 背景露出");
         }
     }
