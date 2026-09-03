@@ -1,0 +1,63 @@
+# ============================================================
+# Unity 标准 .gitignore（参考 GitHub/gitignore Unity 模板）
+# ============================================================
+
+# ---- Unity 生成目录（最大头） ----
+/[Ll]ibrary/
+/[Tt]emp/
+/[Oo]bj/
+/[Bb]uild/
+/[Bb]uilds/
+/[Ll]ogs/
+/[Uu]ser[Ss]ettings/
+/[Mm]emoryCaptures/
+
+# ---- Unity 编译产物 ----
+*.csproj
+*.unityproj
+*.sln
+*.suo
+*.tmp
+*.user
+*.userprefs
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
+
+# Unity 单文件生成
+sysinfo.txt
+*.apk
+*.aab
+*.unitypackage
+*.app
+crashlytics-build.properties
+
+# ---- Unity Asset 序列化错误缓存（不要提交） ----
+/[Aa]ssets/AssetStoreTools*
+/[Aa]ssets/AddressableAssetsData/
+/[Aa]ssets/[Ii]mportErrors*
+
+# ---- IDE / 编辑器 ----
+.vs/
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ---- 个人本地工具配置（不入库） ----
+/.codex/
+
+# ============================================================
+# 备注：以下必须入库（与 Unity 标准一致）
+#   Assets/           - 全部源码、场景、Prefab、贴图
+#   ProjectSettings/  - 工程配置
+#   Packages/manifest.json + packages-lock.json
+#   *.cs / *.cs.meta  - 每个源文件必须有 .meta
+# ============================================================

@@ -1,0 +1,135 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 91b146903419da343a15ffedc6e0a1f1, type: 3}
+  m_Name: TileDatabase
+  m_EditorClassIdentifier: Assembly-CSharp::Ashfall.TileDatabase
+  emptyTile: {fileID: 11400000, guid: bb9da42b81dcae84ebacdfb648092836, type: 2}
+  bedrockTile: {fileID: 11400000, guid: c26d70345b687bb45ab7b2127f283dfb, type: 2}
+  layers:
+  - startDepth: 0
+    tiles:
+    - {fileID: 11400000, guid: 878f284a2e10127459ccde1a252acbb3, type: 2}
+    - {fileID: 11400000, guid: 5812d7466b1b458429a83fa52030238c, type: 2}
+    weights:
+    - 60
+    - 40
+    caveChance: 0.02
+  - startDepth: 70
+    tiles:
+    - {fileID: 11400000, guid: 878f284a2e10127459ccde1a252acbb3, type: 2}
+    - {fileID: 11400000, guid: 5812d7466b1b458429a83fa52030238c, type: 2}
+    - {fileID: 11400000, guid: 48f619510b976dd4796cf9a526a1af51, type: 2}
+    weights:
+    - 15
+    - 45
+    - 40
+    caveChance: 0.03
+  - startDepth: 110
+    tiles:
+    - {fileID: 11400000, guid: 5812d7466b1b458429a83fa52030238c, type: 2}
+    - {fileID: 11400000, guid: 48f619510b976dd4796cf9a526a1af51, type: 2}
+    - {fileID: 11400000, guid: 42a433155efb4194f920b3485a6c2e32, type: 2}
+    - {fileID: 11400000, guid: 7b405529199c5f24980ac751c9ab3e3b, type: 2}
+    weights:
+    - 20
+    - 40
+    - 35
+    - 5
+    caveChance: 0.04
+  - startDepth: 180
+    tiles:
+    - {fileID: 11400000, guid: 48f619510b976dd4796cf9a526a1af51, type: 2}
+    - {fileID: 11400000, guid: 42a433155efb4194f920b3485a6c2e32, type: 2}
+    - {fileID: 11400000, guid: 960316743994e3e4da1e1366c81cca53, type: 2}
+    - {fileID: 11400000, guid: 7b405529199c5f24980ac751c9ab3e3b, type: 2}
+    weights:
+    - 20
+    - 40
+    - 35
+    - 5
+    caveChance: 0.05
+  - startDepth: 250
+    tiles:
+    - {fileID: 11400000, guid: 42a433155efb4194f920b3485a6c2e32, type: 2}
+    - {fileID: 11400000, guid: 960316743994e3e4da1e1366c81cca53, type: 2}
+    - {fileID: 11400000, guid: 4720bcd8abc67114197e131d0ed5472f, type: 2}
+    - {fileID: 11400000, guid: 7b405529199c5f24980ac751c9ab3e3b, type: 2}
+    weights:
+    - 20
+    - 40
+    - 30
+    - 10
+    caveChance: 0.05
+  - startDepth: 330
+    tiles:
+    - {fileID: 11400000, guid: 960316743994e3e4da1e1366c81cca53, type: 2}
+    - {fileID: 11400000, guid: 4720bcd8abc67114197e131d0ed5472f, type: 2}
+    - {fileID: 11400000, guid: a730412145f69ad428f290d95fe4790f, type: 2}
+    - {fileID: 11400000, guid: 7b405529199c5f24980ac751c9ab3e3b, type: 2}
+    weights:
+    - 20
+    - 35
+    - 35
+    - 10
+    caveChance: 0.06
+  - startDepth: 420
+    tiles:
+    - {fileID: 11400000, guid: 4720bcd8abc67114197e131d0ed5472f, type: 2}
+    - {fileID: 11400000, guid: a730412145f69ad428f290d95fe4790f, type: 2}
+    - {fileID: 11400000, guid: 927ef7aa3f1bbf748947890b25d23f0f, type: 2}
+    - {fileID: 11400000, guid: 7b405529199c5f24980ac751c9ab3e3b, type: 2}
+    weights:
+    - 20
+    - 35
+    - 35
+    - 10
+    caveChance: 0.06
+  - startDepth: 500
+    tiles:
+    - {fileID: 11400000, guid: a730412145f69ad428f290d95fe4790f, type: 2}
+    - {fileID: 11400000, guid: 927ef7aa3f1bbf748947890b25d23f0f, type: 2}
+    - {fileID: 11400000, guid: 9b12752de481afd468f1aa656602f732, type: 2}
+    - {fileID: 11400000, guid: 7f9fd3aded3a2fd45b8ecf86770e0735, type: 2}
+    - {fileID: 11400000, guid: 7b405529199c5f24980ac751c9ab3e3b, type: 2}
+    weights:
+    - 20
+    - 35
+    - 35
+    - 5
+    - 5
+    caveChance: 0.07
+  - startDepth: 580
+    tiles:
+    - {fileID: 11400000, guid: 927ef7aa3f1bbf748947890b25d23f0f, type: 2}
+    - {fileID: 11400000, guid: 9b12752de481afd468f1aa656602f732, type: 2}
+    - {fileID: 11400000, guid: 05fc10154f9ffea40b4926f8fb17c384, type: 2}
+    - {fileID: 11400000, guid: 7f9fd3aded3a2fd45b8ecf86770e0735, type: 2}
+    - {fileID: 11400000, guid: 7b405529199c5f24980ac751c9ab3e3b, type: 2}
+    weights:
+    - 15
+    - 45
+    - 20
+    - 15
+    - 5
+    caveChance: 0.07
+  - startDepth: 620
+    tiles:
+    - {fileID: 11400000, guid: 9b12752de481afd468f1aa656602f732, type: 2}
+    - {fileID: 11400000, guid: 05fc10154f9ffea40b4926f8fb17c384, type: 2}
+    - {fileID: 11400000, guid: 7f9fd3aded3a2fd45b8ecf86770e0735, type: 2}
+    - {fileID: 11400000, guid: 7b405529199c5f24980ac751c9ab3e3b, type: 2}
+    weights:
+    - 25
+    - 45
+    - 25
+    - 5
+    caveChance: 0.08
