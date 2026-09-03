@@ -20,7 +20,8 @@ namespace Ashfall.EditorTools
     {
         const string SpriteFolder = "Assets/Art/Placeholder/Block";
         const string ProfileFolder = "Assets/Ashfall/Data/Visual";
-        const int S = 32;   // 纹理边长（px）；ppu = S → 1 unit = 1 格
+        // 纹理边长（px）= BlockSpec.PixelSize；PPU=BlockSpec.PPU → 世界尺寸 1 unit = 1 格
+        const int S = BlockSpec.PixelSize;
 
         [MenuItem("灰烬之下/生成 DEV-002 Placeholder 视觉资产")]
         public static void Build()
@@ -88,7 +89,7 @@ namespace Ashfall.EditorTools
             var importer = (TextureImporter)AssetImporter.GetAtPath(pngPath);
             importer.textureType = TextureImporterType.Sprite;
             importer.spriteImportMode = SpriteImportMode.Single;
-            importer.spritePixelsPerUnit = S;   // 32px = 1 unit = 1 格
+            importer.spritePixelsPerUnit = BlockSpec.PPU;   // 128px = 1 unit = 1 格
             importer.alphaIsTransparency = true;
             importer.filterMode = FilterMode.Point;
             importer.SaveAndReimport();
@@ -108,43 +109,46 @@ namespace Ashfall.EditorTools
                 for (int y = 0; y < S; y++)
                     tex.SetPixel(x, y, baseColor);
 
-            // 1px 边缘描边
-            for (int i = 0; i < S; i++)
+            // 1px→4px 边缘描边（128 画布下保持可辨识的边框）
+            for (int b = 0; b < 4; b++)
             {
-                tex.SetPixel(i, 0, edge);
-                tex.SetPixel(i, S - 1, edge);
-                tex.SetPixel(0, i, edge);
-                tex.SetPixel(S - 1, i, edge);
+                for (int i = 0; i < S; i++)
+                {
+                    tex.SetPixel(i, b, edge);
+                    tex.SetPixel(i, S - 1 - b, edge);
+                    tex.SetPixel(b, i, edge);
+                    tex.SetPixel(S - 1 - b, i, edge);
+                }
             }
 
             if (isBreak)
             {
-                // 崩碎：深色底 + 几块分离碎块
+                // 崩碎：深色底 + 几块分离碎块（坐标按 128 画布放大 4×）
                 for (int x = 0; x < S; x++)
                     for (int y = 0; y < S; y++)
                         tex.SetPixel(x, y, baseColor * 0.30f);
 
-                FillRect(tex, 4, 4, 10, 10, baseColor);
-                FillRect(tex, 18, 5, 9, 8, baseColor * 0.88f);
-                FillRect(tex, 6, 19, 8, 7, baseColor * 0.82f);
-                FillRect(tex, 19, 20, 8, 7, baseColor * 0.76f);
+                FillRect(tex, 16, 16, 40, 40, baseColor);
+                FillRect(tex, 72, 20, 36, 32, baseColor * 0.88f);
+                FillRect(tex, 24, 76, 32, 28, baseColor * 0.82f);
+                FillRect(tex, 76, 80, 32, 28, baseColor * 0.76f);
             }
             else
             {
                 switch (crackStage)
                 {
                     case 1:
-                        DrawLine(tex, 5, 5, 26, 27, crack);
+                        DrawLine(tex, 20, 20, 104, 108, crack);
                         break;
                     case 2:
-                        DrawLine(tex, 5, 5, 26, 27, crack);
-                        DrawLine(tex, 26, 5, 5, 27, crack);
+                        DrawLine(tex, 20, 20, 104, 108, crack);
+                        DrawLine(tex, 104, 20, 20, 108, crack);
                         break;
                     case 3:
-                        DrawLine(tex, 5, 5, 26, 27, crack);
-                        DrawLine(tex, 26, 5, 5, 27, crack);
-                        DrawLine(tex, 16, 3, 16, 29, crack);
-                        DrawLine(tex, 3, 16, 29, 16, crack);
+                        DrawLine(tex, 20, 20, 104, 108, crack);
+                        DrawLine(tex, 104, 20, 20, 108, crack);
+                        DrawLine(tex, 64, 12, 64, 116, crack);
+                        DrawLine(tex, 12, 64, 116, 64, crack);
                         break;
                 }
             }
