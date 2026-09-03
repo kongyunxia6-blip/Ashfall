@@ -24,3 +24,4 @@ MonoBehaviour:
   isSolid: 0
   isHazard: 0
   hazardDamage: 0
+  dropId: 

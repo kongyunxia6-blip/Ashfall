@@ -37,6 +37,27 @@ namespace Ashfall
         Tile solidTile;
         Grid layoutGrid;
 
+        [Header("DEV-001 耐久 V1")]
+        [Tooltip("背景层 Tilemap（可选）。若指定，挖穿前景后露出背景（背景 Tilemap sortingOrder 应低于前景）。" +
+                 "测试场景 BlockV1Test.unity 用它来显示 Dirt 背景")]
+        public Tilemap backgroundTilemap;
+
+        [Tooltip("崩碎状态持续秒数（方块耐久归零到真正从 Grid/Tilemap 移除之间的窗口）。" +
+                 "0 = 立即移除（V1 默认）；>0 时给崩碎帧/粒子/音效留播放时间。")]
+        [Min(0f)] public float breakDuration = 0f;
+
+        /// <summary>
+        /// DEV-001：每格当前耐久（旁路数组，跟 grid 平行）。
+        /// &gt;0=剩余击数；0=已进入崩碎（Break）状态、尚未移除；-1=空格/未初始化。
+        /// </summary>
+        int[,] curDurability;
+
+        /// <summary>
+        /// DEV-001：每格满耐久（用于裂纹阶段比例与「完整」判定）。跟 curDurability 平行。
+        /// 测试脚手架可通过 SetTile 的 durability 参数做「实例级耐久覆盖」，不污染共享 SO 的 digHits。
+        /// </summary>
+        int[,] maxDurability;
+
         /// <summary>每格的世界尺寸（取自 Grid 组件，默认 1）</summary>
         Vector3 CellSize => layoutGrid != null ? layoutGrid.cellSize : Vector3.one;
 
@@ -48,6 +69,13 @@ namespace Ashfall
 
         /// <summary>某格被挖穿时触发（格子坐标, 被挖到的方块）</summary>
         public event Action<Vector2Int, TileDefinition> OnTileDug;
+
+        /// <summary>
+        /// DEV-001：某格耐久归零、进入「崩碎」状态时触发（格子坐标, 方块定义）。
+        /// 触发时机在方块从 Grid/Tilemap 移除之前——崩碎帧/粒子/音效等表现可在此接入，
+        /// 配合 breakDuration 的延迟移除窗口播放完整动画。
+        /// </summary>
+        public event Action<Vector2Int, TileDefinition> OnBlockBreakStart;
 
         public int Width => width;
         public int Depth => depth;
@@ -77,6 +105,8 @@ namespace Ashfall
             }
 
             grid = new TileDefinition[width, depth];
+            curDurability = new int[width, depth];
+            maxDurability = new int[width, depth];
             int center = width / 2;
 
             for (int y = 0; y < depth; y++)
@@ -110,6 +140,16 @@ namespace Ashfall
                 }
             }
 
+            // DEV-001：初始化耐久（实心格满耐久 = digHits，空格 = -1）
+            for (int y = 0; y < depth; y++)
+                for (int x = 0; x < width; x++)
+                {
+                    var def = grid[x, y];
+                    int max = (def != null && def.isSolid) ? Mathf.Max(1, def.digHits) : -1;
+                    maxDurability[x, y] = max;
+                    curDurability[x, y] = max;
+                }
+
             RefreshAll();
         }
 
@@ -128,6 +168,9 @@ namespace Ashfall
             var tile = ScriptableObject.CreateInstance<Tile>();
             tile.sprite = sprite;
             tile.name = "Ashfall_SolidTile";
+            // DEV-001：Tile 默认 flags=LockColor 会让 SetTile 后 cell 的 SetColor 被忽略，
+            // 显式改 None 才能让 RefreshTile 的裂纹阶段调灰生效。
+            tile.flags = TileFlags.None;
             return tile;
         }
 
@@ -155,7 +198,19 @@ namespace Ashfall
 
             tilemap.SetTile(cell, solidTile);
             tilemap.SetTileFlags(cell, TileFlags.None);
-            tilemap.SetColor(cell, def.color);
+
+            // DEV-001：按当前裂纹阶段调灰（完整=def.color → 崩碎=黑）。
+            // max 取该格实例级满耐久（测试可覆盖），而非共享 SO 的 digHits。
+            int max = (maxDurability != null && InBounds(x, y) && maxDurability[x, y] >= 1)
+                ? maxDurability[x, y] : Mathf.Max(1, def.digHits);
+            int cur = (curDurability != null && InBounds(x, y)) ? curDurability[x, y] : max;
+            int stage;
+            if (cur <= 0)
+                stage = 3;   // 崩碎（Break）状态：最暗档，与「裂纹3」同档视觉（V1 无独立崩碎美术）
+            else
+                stage = GetCrackStage(Mathf.Min(cur, max), max);
+            float dark = stage / 3f;
+            tilemap.SetColor(cell, Color.Lerp(def.color, Color.black, dark * 0.55f));
         }
 
         // ---------- 查询 ----------
@@ -213,7 +268,10 @@ namespace Ashfall
 
         // ---------- 挖掘 ----------
 
-        /// <summary>挖穿一格。成功返回 true，并通过 dug 输出被挖到的方块</summary>
+        /// <summary>
+        /// 立即挖穿一格（跳过崩碎延迟）。成功返回 true，并通过 dug 输出被挖到的方块。
+        /// 保留用于兼容旧调用方；DEV-001 的「单格受击」请优先用 HitBlock。
+        /// </summary>
         public bool Dig(int x, int y, out TileDefinition dug)
         {
             dug = null;
@@ -222,7 +280,51 @@ namespace Ashfall
             var def = GetTile(x, y);
             if (def == null || !def.isSolid) return false;
 
+            // 直接进入崩碎状态（触发 OnBlockBreakStart），再立即移除——跳过 breakDuration 延迟
+            if (curDurability != null && InBounds(x, y))
+                curDurability[x, y] = 0;
+            OnBlockBreakStart?.Invoke(new Vector2Int(x, y), def);
+
+            RemoveBlock(x, y, out dug);
+            return dug != null;
+        }
+
+        /// <summary>
+        /// DEV-001：进入「崩碎」状态（耐久归零 → 触发 OnBlockBreakStart → 按 breakDuration 延迟后移除）。
+        /// 把崩碎从「移除」中拆出来，让崩碎帧/粒子/音效在方块真正消失前有一个可观察、可替换的表现窗口，
+        /// 而不是 HP=0 直接消失。调用后若 breakDuration>0，方块会停留该帧等待移除。
+        /// </summary>
+        void BeginBreak(int x, int y, TileDefinition def)
+        {
+            if (curDurability != null && InBounds(x, y))
+                curDurability[x, y] = 0;   // 标记崩碎中（等待移除）
+
+            // 崩碎视觉（最暗档）；表现层可通过 OnBlockBreakStart + breakDuration 接入正式崩碎动画
+            RefreshTile(x, y);
+
+            OnBlockBreakStart?.Invoke(new Vector2Int(x, y), def);
+
+            if (breakDuration > 0f)
+                StartCoroutine(Co_RemoveAfterDelay(x, y, def));
+            else
+                RemoveBlock(x, y, out _);
+        }
+
+        /// <summary>
+        /// DEV-001：真正移除方块（grid→empty + 前景 Tile 清除 + OnTileDug + 落石）。
+        /// 与 BeginBreak 分离，构成「崩碎 → 移除」两步，便于 Sprite Sheet 崩碎帧在两步之间接入。
+        /// </summary>
+        public bool RemoveBlock(int x, int y, out TileDefinition dug)
+        {
+            dug = null;
+            if (!InBounds(x, y)) return false;
+
+            var def = GetTile(x, y);
+            if (def == null || !def.isSolid) return false;
+
             grid[x, y] = database.emptyTile;
+            if (curDurability != null) curDurability[x, y] = -1;
+            if (maxDurability != null) maxDurability[x, y] = -1;
             RefreshTile(x, y);
 
             dug = def;
@@ -230,6 +332,12 @@ namespace Ashfall
 
             if (enableFallingRocks) TryRockFall(x, y);
             return true;
+        }
+
+        System.Collections.IEnumerator Co_RemoveAfterDelay(int x, int y, TileDefinition def)
+        {
+            yield return new WaitForSeconds(breakDuration);
+            RemoveBlock(x, y, out _);
         }
 
         /// <summary>
@@ -255,5 +363,118 @@ namespace Ashfall
             // 连锁检查更上方
             TryRockFall(x, above);
         }
+
+        // ---------- DEV-001：耐久 / 裂纹 / 崩碎 ----------
+
+        /// <summary>
+        /// DEV-001：单格受击。耐久 -1，未崩碎时刷新裂纹视觉；耐久归零时进入「崩碎」状态
+        /// （BeginBreak → 延迟/立即 RemoveBlock），而非 HP=0 直接消失。
+        /// 返回 true 表示命中了实心格并成功扣除耐久；dug 仅在 RemoveBlock（真正移除）时由 OnTileDug 消费，
+        /// 本方法内 dug 恒为 null——掉落/入包统一走 OnTileDug → HandleTileDug。
+        /// 多次调用 HitBlock 是"击打多次"的意思——计数由 DigGrid 承载，玩家侧不再持有进度。
+        /// </summary>
+        public bool HitBlock(int x, int y, out TileDefinition dug)
+        {
+            dug = null;
+            if (!InBounds(x, y)) return false;
+
+            var def = GetTile(x, y);
+            if (def == null || !def.isSolid) return false;
+
+            if (curDurability == null || maxDurability == null) Generate();
+            if (curDurability == null || maxDurability == null) return false;
+
+            int cur = curDurability[x, y];
+            if (cur <= 0)
+            {
+                // 已进入崩碎（等待移除）或已移除：不再重复受击
+                return false;
+            }
+
+            cur--;
+            curDurability[x, y] = cur;
+
+            if (cur <= 0)
+            {
+                // 崩碎：进入 Break 状态（OnBlockBreakStart + 可选延迟移除），而非立即消失
+                BeginBreak(x, y, def);
+                return true;
+            }
+
+            // 未崩碎：只刷新裂纹视觉
+            RefreshTile(x, y);
+            return true;
+        }
+
+        /// <summary>
+        /// DEV-001：某格当前耐久（剩余击数）。&gt;0=剩余；0=崩碎中（等待移除）；-1=空格/未初始化。
+        /// </summary>
+        public int GetDurability(int x, int y)
+        {
+            if (curDurability == null || !InBounds(x, y)) return -1;
+            return curDurability[x, y];
+        }
+
+        /// <summary>
+        /// DEV-001：某格满耐久（耐久上限，只读）。&gt;=1=实心格满耐久；-1=空格/未初始化。
+        /// 这是耐久的单一真相源：支持 SetTile 的实例级耐久覆盖（测试/特殊 Block），
+        /// 调用方（如 DrillVehicle 的 HUD 进度）应以此为准，而非共享 SO 的 digHits。
+        /// </summary>
+        public int GetMaxDurability(int x, int y)
+        {
+            if (maxDurability == null || !InBounds(x, y)) return -1;
+            return maxDurability[x, y];
+        }
+
+        /// <summary>DEV-001：某格是否处于「崩碎中」状态（耐久归零、等待移除）。</summary>
+        public bool IsBreaking(int x, int y)
+        {
+            if (curDurability == null || !InBounds(x, y)) return false;
+            var def = GetTile(x, y);
+            return def != null && def.isSolid && curDurability[x, y] == 0;
+        }
+
+        /// <summary>
+        /// DEV-001：裂纹阶段（0=完整 1=裂纹1 2=裂纹2 3=裂纹3/崩碎临界）。
+        /// 按剩余耐久比例分档：≥100% 完整 / ≥75% 裂纹1 / ≥50% 裂纹2 / ≥25% 裂纹3；0 已崩碎（由调用方判定）。
+        /// max=4 时完整轨迹：4(完整)→3(裂纹1)→2(裂纹2)→1(裂纹3)→0(崩碎→消失)。
+        /// </summary>
+        public static int GetCrackStage(int cur, int max)
+        {
+            if (max <= 0 || cur >= max) return 0;
+            if (cur >= Mathf.CeilToInt(max * 0.75f)) return 1;
+            if (cur >= Mathf.CeilToInt(max * 0.50f)) return 2;
+            return 3;
+        }
+
+        /// <summary>
+        /// DEV-001：外部设置某格的方块（测试场景搭建用，会同步初始化耐久并刷新渲染）。
+        /// durability 参数为「实例级耐久覆盖」：&gt;=1 时用该值，否则回落到 def.digHits。
+        /// 测试脚手架应传 durability 而非在运行时改共享 SO 的 digHits，避免主场景共享资产被污染。
+        /// </summary>
+        public void SetTile(int x, int y, TileDefinition def, int durability = -1)
+        {
+            if (!InBounds(x, y)) return;
+            if (curDurability == null || maxDurability == null) Generate();
+            if (grid == null) return;
+
+            grid[x, y] = def;
+
+            int max = -1;
+            if (def != null && def.isSolid)
+                max = durability >= 1 ? durability : Mathf.Max(1, def.digHits);
+
+            if (maxDurability != null) maxDurability[x, y] = max;
+            if (curDurability != null) curDurability[x, y] = max;
+            RefreshTile(x, y);
+        }
+
+#if UNITY_EDITOR
+        /// <summary>DEV-001：编辑器下强制重新生成（BlockV1Builder 用）。Play 模式下 Awake 也会自动调。</summary>
+        public void RegenerateFromDatabase()
+        {
+            Generate();
+        }
+#endif
     }
 }

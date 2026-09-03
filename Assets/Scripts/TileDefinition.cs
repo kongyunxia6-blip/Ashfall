@@ -50,5 +50,12 @@ namespace Ashfall
 
         [Tooltip("危险伤害（每秒）")]
         [Min(0)] public int hazardDamage = 0;
+
+        [Header("DEV-001 掉落预留")]
+        [Tooltip("通用掉落标识（drop id）。非空时，本格被挖穿后由独立的掉落系统（BlockDropHook）读取该 id 派发掉落。" +
+                 "空字符串 = 走默认通用入包流程，无特殊掉落。\n" +
+                 "核心 Block 定义只携带一个通用字符串，不感知具体矿种；「掉什么 / 掉几个 / 概率 / 伴生物」由掉落系统按 id 查表决定。" +
+                 "示例：\"iron_ore\"（铁矿残块）、\"copper_ore\"（铜矿残块）…… 新增矿种无需改动 DigGrid / DrillVehicle / TileDefinition 的核心挖掘逻辑。")]
+        public string dropId = "";
     }
 }
