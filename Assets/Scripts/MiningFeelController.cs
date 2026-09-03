@@ -345,7 +345,8 @@ namespace Ashfall
 
         /// <summary>
         /// 懒生成唯一一个目标描边对象（全场景最多 1 个，不是每格永久 GameObject）。
-        /// 描边 = 32×32 仅边缘像素的中空框，盖在前景 Tilemap 之上但不遮挡格子内部的裂纹 Sprite。
+        /// 描边 = 128×128 仅边缘像素的中空框（全局规格见 BlockSpec：1 Block = 1×1 世界 = 128px/PPU128），
+        /// 盖在前景 Tilemap 之上但不遮挡格子内部的裂纹 Sprite。
         /// </summary>
         void EnsureHighlight()
         {
@@ -353,7 +354,8 @@ namespace Ashfall
 
             if (highlightSprite == null)
             {
-                const int N = 32, B = 3;
+                const int N = BlockSpec.PixelSize;   // 128px 画布
+                const int B = 12;                    // 边框 12px（等比于原 3px@32px 画布）
                 var tex = new Texture2D(N, N, TextureFormat.RGBA32, false);
                 tex.filterMode = FilterMode.Point;
                 for (int x = 0; x < N; x++)
@@ -363,7 +365,7 @@ namespace Ashfall
                         tex.SetPixel(x, y, edge ? Color.white : Color.clear);
                     }
                 tex.Apply();
-                highlightSprite = Sprite.Create(tex, new Rect(0, 0, N, N), new Vector2(0.5f, 0.5f), N);
+                highlightSprite = Sprite.Create(tex, new Rect(0, 0, N, N), new Vector2(0.5f, 0.5f), BlockSpec.PPU);
                 highlightSprite.name = "DEV003_TargetOutline";
             }
 
