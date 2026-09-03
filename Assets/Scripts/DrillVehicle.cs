@@ -6,6 +6,18 @@ using UnityEngine.EventSystems;
 namespace Ashfall
 {
     /// <summary>
+    /// DEV-003：一次挖掘命中的结果。供 DrillVehicle.TryDigHit 返回给调用方
+    /// （手动点击 / MiningFeelController），用于节奏控制（Break 追加停顿等）。
+    /// </summary>
+    public enum DigHitResult
+    {
+        NotSolid,      // 目标不是可挖实心格（含崩碎中、被移走）
+        HardnessLow,   // 钻头等级不足
+        Hit,           // 命中，耐久 -1，未崩碎
+        Broken         // 命中并使其进入崩碎
+    }
+
+    /// <summary>
     /// 玩家钻地舱：移动、钻探、燃料、船体、货舱、高温伤害。
     /// 挂在哪：玩家物体（需要 Rigidbody2D + Collider2D），并把 DigGrid 拖进 grid 字段。
     /// 操作：A/D + ←/→ 移动；挖矿 = 手动——按住方向键选方向 + 单击鼠标左键，
@@ -154,6 +166,12 @@ namespace Ashfall
         MovementMode currentMode;
 
         /// <summary>
+        /// DEV-003：同物体上的挖掘手感控制器。存在且 enabled 时，单击/按住挖掘由它驱动
+        /// （走 TryDigHit 公共命中路径），本类的单击 TryManualDig 自动让位，避免双份命中。
+        /// </summary>
+        MiningFeelController miningFeel;
+
+        /// <summary>
         /// 格子背包：存每格的【种类 + 数量】，而不是只存总价值。
         /// 存明细才能按种类丢弃、显示清单、让 M4 残骸有落脚点。
         /// 容量由「格数 + 载重上限」双重约束，见 InventoryGrid 类注释。
@@ -178,6 +196,7 @@ namespace Ashfall
             rb = GetComponent<Rigidbody2D>();
             rb.freezeRotation = true;
             rb.interpolation = RigidbodyInterpolation2D.Interpolate;
+            miningFeel = GetComponent<MiningFeelController>();   // DEV-003：可空，空则走旧单击挖掘
             SetMovementMode(startMode);   // 取代硬编码 gravityScale=0，支持 Hover/Gravity 共存
         }
 
@@ -272,10 +291,12 @@ namespace Ashfall
 
             Vector2 input = ReadInput();
 
-            // 手动挖掘（纯手动）：单击鼠标左键 = 朝当前按住的移动键方向，立即挖穿一格。
-            // 不再有「按住方向键碰墙自动钻」——移动撞墙只停住，想挖就点左键。
+            // 手动挖掘：DEV-003 起，若同物体挂了 MiningFeelController 且 enabled，
+            // 单击/按住挖掘全部交给它的状态机（单击 = 短按住，走同一 TryDigHit 路径）；
+            // 没有控制器时保持旧行为：单击鼠标左键 = 朝当前按住的移动键方向挖一格。
             // 指针停在 UI 上（背包面板）时不挖 —— 否则「点格子丢弃」会顺带挖穿一格方块。
-            if (Input.GetMouseButtonDown(0) && !IsPointerOverUI())
+            if ((miningFeel == null || !miningFeel.enabled)
+                && Input.GetMouseButtonDown(0) && !IsPointerOverUI())
                 TryManualDig(input);
 
             DrainFuel(input);
@@ -302,8 +323,9 @@ namespace Ashfall
         /// 所以点了背包格子仍会穿透触发挖掘 —— 必须自己问 EventSystem。
         /// 注意：用 `using UnityEngine.EventSystems;` 引入类型后，要写 `EventSystem.current`，
         /// 不能写 `EventSystems.EventSystem.current` —— `using` 不会把嵌套命名空间本身作为标识符暴露。
+        /// DEV-003：改 internal，供 MiningFeelController 复用同一判断（不复制逻辑）。
         /// </summary>
-        static bool IsPointerOverUI()
+        internal static bool IsPointerOverUI()
         {
             var es = EventSystem.current;
             return es != null && es.IsPointerOverGameObject();
@@ -568,17 +590,30 @@ namespace Ashfall
                 return;
             }
 
-            Vector2Int cell = hit.Value;
+            TryDigHit(hit.Value);
+        }
+
+        /// <summary>
+        /// DEV-003：对指定格发起一次挖掘命中（公共命中路径）。
+        /// 手动点击（TryManualDig）与 MiningFeelController 的单格状态机都走这里，
+        /// 保证硬度门槛、HUD 进度、DigGrid 命中只有一份实现。每次调用最多调一次 HitBlock。
+        /// 返回结果供调用方做节奏控制（Broken 时追加停顿）。
+        /// </summary>
+        public DigHitResult TryDigHit(Vector2Int cell)
+        {
             var tdef = grid.GetTile(cell.x, cell.y);
+            if (tdef == null || !tdef.isSolid || grid.IsBreaking(cell.x, cell.y))
+                return DigHitResult.NotSolid;
+
             int drillLevel = upgrades != null ? upgrades.DrillLevel : 1;
             if (tdef.hardness > drillLevel)
             {
                 ResetDig();
                 ShowMessageThrottled($"钻头不足：需要 Lv{tdef.hardness}（当前 Lv{drillLevel}）", 0.5f);
-                return;
+                return DigHitResult.HardnessLow;
             }
 
-            // DEV-001：耐久由 DigGrid 承载。玩家每次点击 = 调 HitBlock 一次。
+            // DEV-001：耐久由 DigGrid 承载。每次命中 = 调 HitBlock 一次。
             // digProgress/digTargetTime 保留给 HUD 显示，但数据源 = DigGrid.curDurability
             if (!isDigging || cell != digCell)
             {
@@ -591,20 +626,17 @@ namespace Ashfall
             int instanceMax = grid.GetMaxDurability(cell.x, cell.y);
             digTargetTime = instanceMax >= 1 ? instanceMax : Mathf.Max(1, tdef.digHits);
 
-            if (grid.HitBlock(cell.x, cell.y, out var dug))
-            {
-                int curAfter = grid.GetDurability(cell.x, cell.y);
-                digProgress = digTargetTime - Mathf.Max(0, curAfter);   // 已击数 = max - cur
+            if (!grid.HitBlock(cell.x, cell.y, out var dug))
+                return DigHitResult.NotSolid;
 
-                if (dug != null)
-                {
-                    // 崩碎：走 OnTileDug → HandleTileDug（含背包添加）
-                }
-                else if (digTargetTime > 1f)
-                {
-                    ShowMessageThrottled($"{tdef.displayName}：{Mathf.RoundToInt(digProgress)}/{Mathf.RoundToInt(digTargetTime)} 击", 0.35f);
-                }
-            }
+            int curAfter = grid.GetDurability(cell.x, cell.y);
+            digProgress = digTargetTime - Mathf.Max(0, curAfter);   // 已击数 = max - cur
+            bool broke = curAfter <= 0;
+
+            if (!broke && digTargetTime > 1f)
+                ShowMessageThrottled($"{tdef.displayName}：{Mathf.RoundToInt(digProgress)}/{Mathf.RoundToInt(digTargetTime)} 击", 0.35f);
+
+            return broke ? DigHitResult.Broken : DigHitResult.Hit;
         }
 
         void ResetDig()
