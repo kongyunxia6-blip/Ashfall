@@ -3,6 +3,18 @@ using UnityEngine;
 namespace Ashfall
 {
     /// <summary>
+    /// DEV-004：Block 通用行为类型标记（不硬编码进矿物名）。
+    /// V1 仅实现 Normal / SupportRock / LooseRock；后续特殊 Block
+    /// （Explosive / Hot / Resonance / Conductive / RuinSeal…）在枚举扩展，本 PR 不实现。
+    /// </summary>
+    public enum BlockType
+    {
+        Normal = 0,        // 常规方块，无环境行为
+        SupportRock = 1,   // 承重岩：被真正移除后触发上方 LooseRock 坍塌检查
+        LooseRock = 2,     // 松散岩：正常静止；下方关键支撑被移除后 Unstable → 坍塌
+    }
+
+    /// <summary>
     /// 单个方块 / 矿物的属性定义。
     /// 创建方式：右键 Project 面板 → Create → Ashfall → Tile Definition
     /// </summary>
@@ -57,6 +69,12 @@ namespace Ashfall
                  "核心 Block 定义只携带一个通用字符串，不感知具体矿种；「掉什么 / 掉几个 / 概率 / 伴生物」由掉落系统按 id 查表决定。" +
                  "示例：\"iron_ore\"（铁矿残块）、\"copper_ore\"（铜矿残块）…… 新增矿种无需改动 DigGrid / DrillVehicle / TileDefinition 的核心挖掘逻辑。")]
         public string dropId = "";
+
+        [Header("DEV-004 特殊行为")]
+        [Tooltip("Block 行为类型标记。承重岩(SupportRock)：被真正移除后，正上方同列的松散岩进入 Unstable→坍塌；" +
+                 "松散岩(LooseRock)：正常静止，关键支撑被移除后由 BlockCollapseSystem 接管预警与落格。Normal=无环境行为。" +
+                 "后续特殊 Block 在此枚举扩展（本 PR 不实现）。")]
+        public BlockType blockType = BlockType.Normal;
 
         [Header("DEV-002 表现")]
         [Tooltip("视觉 profile（完整/裂纹1/2/3/崩碎帧的 Sprite）。空则 fallback 到 DEV-001 的纯色方块 + 裂纹调暗。" +

@@ -151,6 +151,7 @@ namespace Ashfall
 
         /// <summary>是否脚踏实地站在方块上（Walk 模式核心状态；其余模式近似维护）。</summary>
         public bool Grounded { get; private set; }
+        private bool wasGrounded;            // 落地状态记忆：仅「离地→落地」过渡时触发 Land，防逐帧重复刷屏
 
         /// <summary>落地瞬间触发（参数 = 落地前的下落速度，正值）。用于音效 / 镜头震动 / 坠落伤害。</summary>
         public event Action<float> OnLanded;
@@ -456,6 +457,7 @@ namespace Ashfall
 
             rb.linearVelocity = new Vector2(vx, vy);
             Grounded = grounded;
+            wasGrounded = grounded;
         }
 
         /// <summary>Gravity 模式 · 关喷气：引擎重力滑翔（原实现，仅补落地冲击反馈）。</summary>
@@ -492,15 +494,18 @@ namespace Ashfall
             rb.linearVelocity = new Vector2(vx, vy);
             Grounded = grid != null && vy == 0f
                 && !float.IsNegativeInfinity(GroundTopAt(rb.position.x, rb.position.y - playerRadius - 0.02f));
+            wasGrounded = Grounded;
         }
 
         /// <summary>落地冲击：Motherload 的「墩」感。广播事件（后续接音效/镜头震/坠落伤害），超阈值刷提示。</summary>
         void Land(float impactSpeed)
         {
+            if (wasGrounded) return;                 // 已在地面则忽略重复落地（防逐帧刷屏 / 重复触发落地事件）
+            wasGrounded = true;
             OnLanded?.Invoke(impactSpeed);
             if (hardLandingSpeed > 0f && impactSpeed >= hardLandingSpeed)
                 ShowMessageThrottled("重重落地！", 0.6f);
-            Debug.Log($"[DrillVehicle] 落地 impact={impactSpeed:F2} grounded={Grounded}");
+            // Debug.Log 已移除：落地日志位于 FixedUpdate 热路径，Play 时持续刷屏会拖垮编辑器
         }
 
         /// <summary>

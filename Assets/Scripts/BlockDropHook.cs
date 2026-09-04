@@ -45,8 +45,8 @@ namespace Ashfall
             // V1：预留掉落派发——仅日志，不改游戏数值。
             // 未来在这里扩展：按 def.dropId 查 drop table（掉什么/掉几个/概率/伴生矿），
             // 或转交给独立掉落系统；核心挖掘逻辑（DigGrid/DrillVehicle/TileDefinition）保持不变。
-            Debug.Log($"[DEV-001] Block dug @ {cell} (dropId=\"{def.dropId}\"). " +
-                      $"Future: dispatch custom drop via drop table here.");
+            // 调试日志已移除：OnBlockDug 在挖掘热路径中每挖一块就刷一次，Play 时刷屏拖垮编辑器。
+            // 需要时可用 #if UNITY_EDITOR 包一层或加频率限制。
         }
     }
 }

@@ -477,6 +477,23 @@ namespace Ashfall
             return def != null && def.isSolid && curDurability[x, y] == 0;
         }
 
+        // ---------- DEV-004：环境系统辅助（局部坍塌） ----------
+
+        /// <summary>
+        /// DEV-004：通知「有方块塌落到该格」。供 BlockCollapseSystem 落格后复用玩家砸伤通道
+        /// （DrillVehicle.HandleRockFell 已订阅 OnRockFell），玩家侧零改动。
+        /// </summary>
+        public void NotifyRockFell(Vector2Int cell) => OnRockFell?.Invoke(cell);
+
+        /// <summary>
+        /// DEV-004：强制刷新单格视觉（恢复 tilemap 颜色等）。
+        /// 供 BlockCollapseSystem 在预警闪烁结束后把该格恢复为正常渲染。
+        /// </summary>
+        public void RefreshCell(int x, int y)
+        {
+            if (InBounds(x, y)) RefreshTile(x, y);
+        }
+
         /// <summary>
         /// DEV-001：裂纹阶段（0=完整 1=裂纹1 2=裂纹2 3=裂纹3/崩碎临界）。
         /// 按剩余耐久比例分档：≥100% 完整 / ≥75% 裂纹1 / ≥50% 裂纹2 / ≥25% 裂纹3；0 已崩碎（由调用方判定）。
