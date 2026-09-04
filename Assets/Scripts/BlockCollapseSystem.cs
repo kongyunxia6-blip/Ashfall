@@ -162,9 +162,14 @@ namespace Ashfall
                 for (int j = 0; j < ch.cells.Count; j++)
                 {
                     var c = ch.cells[j];
-                    // 玩家抢先挖掉了该格：跳过闪烁（落格时也会跳过它）
                     var t = grid.GetTile(c.x, c.y);
-                    if (t == null || !t.isSolid || t.blockType != BlockType.LooseRock) continue;
+                    if (t == null) continue;   // 已挖空：无颜色残留
+                    if (!t.isSolid || t.blockType != BlockType.LooseRock)
+                    {
+                        // 被改写但仍存在：恢复原色（该格不参与落格，由 ExecuteCollapse 跳过）
+                        grid.RefreshCell(c.x, c.y);
+                        continue;
+                    }
                     if (grid.tilemap != null)
                         grid.tilemap.SetColor(new Vector3Int(c.x, -c.y, 0), flash);
                 }
@@ -174,54 +179,67 @@ namespace Ashfall
         /// <summary>
         /// 执行落格：整段 LooseRock 下移 1 格。
         /// 目标 = 承重岩空位开始逐格上移回填；原段最顶端腾空。
+        /// warning 期间被玩家抢先挖掉 / 改写的格不参与落格。
         /// </summary>
         void ExecuteCollapse(ActiveChain ch)
         {
             if (grid == null) return;
 
-            // 1) 快照每格 def，并清空整段（从原格移除）
             var defs = new List<TileDefinition>(ch.cells.Count);
             var liveCells = new List<Vector2Int>(ch.cells.Count);
 
-            for (int i = 0; i < ch.cells.Count; i++)
+            try
             {
-                var c = ch.cells[i];
-                var t = grid.GetTile(c.x, c.y);
-                if (t == null || !t.isSolid || t.blockType != BlockType.LooseRock)
-                    continue;   // 竞态：已被玩家挖掉/移走 → 跳过
+                // 1) 快照每格 def，并清空仍存活的格（从原格移除）
+                for (int i = 0; i < ch.cells.Count; i++)
+                {
+                    var c = ch.cells[i];
+                    var t = grid.GetTile(c.x, c.y);
+                    if (t == null || !t.isSolid || t.blockType != BlockType.LooseRock)
+                    {
+                        // 竞态：已被玩家抢先挖掉 / 改写成其它内容 → 不参与落格。
+                        // 若该格仍存在（被替换成其它实心块），刷新单格视觉恢复原色，
+                        // 防预警期间叠加的橙色在 tilemap 上残留。
+                        if (t != null && t.isSolid) grid.RefreshCell(c.x, c.y);
+                        continue;
+                    }
 
-                defs.Add(t);
-                liveCells.Add(c);
+                    defs.Add(t);
+                    liveCells.Add(c);
+                }
+
+                if (liveCells.Count == 0) return;   // 整段都被抢先挖光：仅清状态，无落格
+
+                // 清空全部 live 格（不触发 dug/掉落 —— 环境移除不产出矿物）
+                var empty = grid.database != null ? grid.database.emptyTile : null;
+                for (int i = 0; i < liveCells.Count; i++)
+                {
+                    var c = liveCells[i];
+                    if (empty != null) grid.SetTile(c.x, c.y, empty);
+                    else grid.SetTile(c.x, c.y, null);
+                    grid.RefreshCell(c.x, c.y);
+                    OnRockRemovedByCollapse?.Invoke(c);
+                }
+
+                // 2) 从承重岩空位起逐格回填（整段下移 1 格：live[0] → support 位，live[i] → live[i-1] 原位）
+                Vector2Int target = ch.supportCell;
+                for (int i = 0; i < liveCells.Count; i++)
+                {
+                    var c = liveCells[i];
+                    grid.SetTile(target.x, target.y, defs[i]);
+                    grid.RefreshCell(target.x, target.y);
+                    OnRockLanded?.Invoke(c, target);
+                    if (damageOnLanding) grid.NotifyRockFell(target);
+                    target = c;   // 下一个落在当前格的原位
+                }
             }
-
-            if (liveCells.Count == 0)
+            finally
             {
+                // 统一收尾：无论链中哪些格存活 / 被抢先挖掉，整条链全部退出 Unstable。
+                // （不能只清理 liveCells —— 被挖掉/改写而跳过的格坐标会残留在
+                //   unstableCells，未来该坐标重放 LooseRock 时会被 BeginSupportCheck 的
+                //   Contains 检查误断链，形成不可再次坍塌的隐蔽状态。）
                 foreach (var c in ch.cells) unstableCells.Remove(c);
-                return;
-            }
-
-            // 清空全部 live 格（不触发 dug/掉落 —— 环境移除不产出矿物）
-            var empty = grid.database != null ? grid.database.emptyTile : null;
-            for (int i = 0; i < liveCells.Count; i++)
-            {
-                var c = liveCells[i];
-                if (empty != null) grid.SetTile(c.x, c.y, empty);
-                else grid.SetTile(c.x, c.y, null);
-                grid.RefreshCell(c.x, c.y);
-                OnRockRemovedByCollapse?.Invoke(c);
-                unstableCells.Remove(c);
-            }
-
-            // 2) 从承重岩空位起逐格回填（整段下移 1 格：chain[0] → support 位，chain[i] → chain[i-1] 原位）
-            Vector2Int target = ch.supportCell;
-            for (int i = 0; i < liveCells.Count; i++)
-            {
-                var c = liveCells[i];
-                grid.SetTile(target.x, target.y, defs[i]);
-                grid.RefreshCell(target.x, target.y);
-                OnRockLanded?.Invoke(c, target);
-                if (damageOnLanding) grid.NotifyRockFell(target);
-                target = c;   // 下一个落在当前格的原位
             }
         }
 
@@ -257,6 +275,24 @@ namespace Ashfall
                     ch.done = true;
                     chains.RemoveAt(i);
                 }
+            }
+        }
+
+        /// <summary>当前仍登记在 Unstable 状态的格数（探针/测试读取；链结算后应为 0，验证无残留）。</summary>
+        public int UnstableCellCount => unstableCells.Count;
+
+        /// <summary>立即强制结算指定承重岩位置的链（测试用；等价把该链 unstableUntil 拨到过去，不依赖真实帧）。</summary>
+        public void DebugForceCollapse(Vector2Int supportCell)
+        {
+            for (int i = chains.Count - 1; i >= 0; i--)
+            {
+                var ch = chains[i];
+                if (ch.done) { chains.RemoveAt(i); continue; }
+                if (ch.supportCell != supportCell) continue;
+                ExecuteCollapse(ch);
+                ch.done = true;
+                chains.RemoveAt(i);
+                return;
             }
         }
     }
