@@ -283,6 +283,13 @@ namespace Ashfall
         {
             if (IsDead || grid == null) return;
 
+            // DEV-009 死亡帧竞态修复：燃料/船体检查可能在本帧 Die 早退并跳过下方 TrackDepth。
+            // 若物理已把车落入新最深格（FixedUpdate 先于 Update 执行），GameManager.MaxDepthReached
+            // 会停在旧值，而 DepthRegionProgression 的 LateUpdate 按 transform 位置推进 MaxDepthThisRun，
+            // 于是死亡瞬间出现 maxEver 落后 maxRun 1 的 1 帧竞态。故深度同步提前到死亡判定之前，
+            // 保证 Die() 发生时 GameManager.MaxDepthReached 已含当前帧最深深度。
+            TrackDepth();
+
             if (Fuel <= 0f) { Die("燃料耗尽，困死地下"); return; }
             if (Hull <= 0f) { Die("船体损毁"); return; }
 
@@ -303,7 +310,6 @@ namespace Ashfall
             DrainFuel(input);
             ApplyHeat();
             ApplyHazard();
-            TrackDepth();
 
             if (messageTimer > 0f)
             {
