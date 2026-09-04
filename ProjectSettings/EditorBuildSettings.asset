@@ -29,6 +29,9 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Scenes/CoreLoopV1Test.unity
     guid: 0632864766fdb864bb99ebcae7604154
+  - enabled: 1
+    path: Assets/Scenes/SurfaceHubV1Test.unity
+    guid: 0dc7bd311a15fae4c8aeca6ef770d625
   m_configObjects:
     com.unity.dt.app-ui: {fileID: 11400000, guid: 1b1c20d82303e4b5781c3ef50ac1449f, type: 2}
   m_UseUCBPForAssetBundles: 0
