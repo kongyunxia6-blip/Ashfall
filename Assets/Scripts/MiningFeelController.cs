@@ -381,6 +381,15 @@ namespace Ashfall
         // ---------- 测试驱动钩子（MCP Play 实测用） ----------
 
         /// <summary>
+        /// 测试驱动激活中（仅 MCP 实测置位；手玩恒 false）。DrillVehicle.ReadInput 在激活期间
+        /// 以 DebugMove 作为移动输入 → 位移同样走真实 FixedUpdate/physics，与挖掘驱动同源。
+        /// </summary>
+        public bool DebugActive => debugOverride;
+
+        /// <summary>测试驱动当前方向（同 DebugActive 语义，供 DrillVehicle 复用同一份驱动输入）。</summary>
+        public Vector2 DebugMove => debugDir;
+
+        /// <summary>
         /// 测试驱动：覆盖硬件输入，模拟「方向 + 按住」。传入后 Update 走与真实输入完全相同的状态机。
         /// 仅用于自动化实测（MCP 无法注入 OS 级键鼠）；手玩时勿调用。
         /// </summary>
