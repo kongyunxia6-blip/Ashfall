@@ -33,6 +33,12 @@ namespace Ashfall
         [Tooltip("挖空一格后，上方方块塌落的概率 0~1")]
         [Range(0f, 1f)] public float rockFallChance = 0.3f;
 
+        [Header("DEV-007 矿脉（可选）")]
+        [Tooltip("非空时：基础地层只生成纯填充物（value==0，PickStrata），矿物全部由本 OreVeinGenerator " +
+                 "以矿脉形式叠加（ore pass）。为空 = 维持旧版逐格随机（含散点矿）行为不变。" +
+                 "本字段为空时旧场景逐字节零回归。")]
+        public OreVeinGenerator oreVeinGenerator;
+
         TileDefinition[,] grid;
         Tile solidTile;
         Grid layoutGrid;
@@ -117,10 +123,17 @@ namespace Ashfall
                 return;
             }
 
+            // DEV-007：在 Generate 入口统一播种 —— 保证「同一 seed 反复 RegenerateFromDatabase 结果逐字节一致」
+            // （Awake 里也 InitState 过一次，这里重复执行等价；旧场景调用路径与行为不变）。
+            UnityEngine.Random.InitState(seed);
+
             grid = new TileDefinition[width, depth];
             curDurability = new int[width, depth];
             maxDurability = new int[width, depth];
             int center = width / 2;
+
+            // DEV-007：启用矿脉生成时，基础地层只铺纯填充物（矿物全部交给 ore pass 叠加）
+            bool veinMode = oreVeinGenerator != null && oreVeinGenerator.isActiveAndEnabled;
 
             for (int y = 0; y < depth; y++)
             {
@@ -149,7 +162,8 @@ namespace Ashfall
                         continue;
                     }
 
-                    grid[x, y] = database.PickRandom(layer);
+                    // 基础地层：矿脉模式只产填充物，否则维持旧版含散点矿的随机
+                    grid[x, y] = veinMode ? database.PickStrata(layer) : database.PickRandom(layer);
                 }
             }
 
@@ -162,6 +176,10 @@ namespace Ashfall
                     maxDurability[x, y] = max;
                     curDurability[x, y] = max;
                 }
+
+            // DEV-007：基础地层完成后执行矿脉 pass（可选；在耐久初始化后、整图刷新前）
+            if (veinMode)
+                oreVeinGenerator.ApplyToGrid(this);
 
             RefreshAll();
         }
