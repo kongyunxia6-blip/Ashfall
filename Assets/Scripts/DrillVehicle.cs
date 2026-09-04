@@ -806,6 +806,19 @@ namespace Ashfall
             return value;
         }
 
+        /// <summary>统计舱内指定矿种的总件数（遍历主槽；HUD / 出售明细 / 测试只读用）。</summary>
+        public int CountCargo(TileDefinition def)
+        {
+            if (def == null) return 0;
+            int n = 0;
+            for (int i = 0; i < inventory.Capacity; i++)
+            {
+                var s = inventory.GetSlot(i);
+                if (s != null && s.isPrimary && s.def == def) n += s.count;
+            }
+            return n;
+        }
+
         /// <summary>按可用现金加油：能加多少加多少，返回实际花费（钱不够只加一部分）</summary>
         public int Refuel(float pricePerUnit, int availableCash)
         {
