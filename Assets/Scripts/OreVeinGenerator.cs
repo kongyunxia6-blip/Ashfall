@@ -58,7 +58,10 @@ namespace Ashfall
     ///
     /// 职责（只做 ore vein pass，不碰地层生成/不碰挖掘）：
     ///  - 在 DigGrid 的基础地层生成完成后，按 OreDepthBand 的深度带权重种矿脉；
-    ///  - 每条矿脉：随机起点 + 8 邻 random walk / 邻域扩张，尺寸 2~8 格；
+    ///  - 每条矿脉：随机起点 + 8 邻 random walk / 邻域扩张，目标尺寸 2~8 格；
+    ///  - 事务化提交：先在临时列表里规划整条矿脉，达到 veinMinSize 后才一次性写入
+    ///    DigGrid —— 起点被洞穴 / 保留区 / 带边界 / 已有矿 / bedrock 困住而长不到
+    ///    最小尺寸的矿脉整体判失败丢弃，绝不留下单点矿或欠尺寸矿；
     ///  - 同一 seed 完全可复现（内部用独立 System.Random，不依赖 Unity 全局随机流）；
     ///  - 保留区（地表 Hub / 出生 / 竖井 / 测试通道）与不可覆盖格（bedrock / empty /
     ///    已有 value&gt;0 矿物 / 特殊 block）一律跳过，不强制覆盖；
@@ -102,6 +105,9 @@ namespace Ashfall
         /// <summary>本次生成实际种下的矿脉总格数。</summary>
         public int TotalCellsPlanted { get; private set; }
 
+        /// <summary>本次生成中因长不到 veinMinSize 而被整体丢弃的矿脉数（事务化失败，零落格）。</summary>
+        public int SubMinDiscards { get; private set; }
+
         /// <summary>实际生效的种子。</summary>
         public int EffectiveSeed => seedOverride >= 0
             ? seedOverride
@@ -136,6 +142,7 @@ namespace Ashfall
 
             Veins.Clear();
             TotalCellsPlanted = 0;
+            SubMinDiscards = 0;
             if (!HasBands) return;
 
             var rng = new System.Random(EffectiveSeed);
@@ -153,8 +160,11 @@ namespace Ashfall
         }
 
         /// <summary>
-        /// 尝试生长一条矿脉：随机起点（最多 16 次重试）→ 随机矿种 → 目标尺寸 →
-        /// 8 邻随机扩张到目标尺寸或尝试耗尽。起点失败只放弃，不重试整条（无死循环）。
+        /// 尝试生长一条矿脉（事务化）：随机起点（最多 16 次重试）→ 随机矿种 → 目标尺寸 →
+        /// 先在【临时列表】里 8 邻随机扩张到目标尺寸或尝试耗尽；只有最终尺寸 ≥ veinMinSize
+        /// 才一次性写入 DigGrid 并记录。长不到最小尺寸的矿脉整体判失败丢弃，零落格 ——
+        /// 不会出现「起点写进网格却长不出去，留下单点矿」的边界情况。
+        /// 起点/尺寸不足失败只放弃该起点，不重试整条（无死循环，带内矿脉密度由频率配置决定）。
         /// </summary>
         void TryGrowVein(OreDepthBand band, System.Random rng)
         {
@@ -173,20 +183,16 @@ namespace Ashfall
             TileDefinition ore = PickWeightedOre(band, rng);
             if (ore == null) return;
 
-            // 3. 目标尺寸（min≥1；builder 配置建议 2 起，保证大多数矿脉 ≥2）
+            // 3. 目标尺寸（min≥1；builder 配置 2/3/4 起，保证矿脉 ≥2 的 DEV-007 核心规则）
             int lo = Mathf.Max(1, band.veinMinSize);
             int hi = Mathf.Max(lo, band.veinMaxSize);
             int targetSize = rng.Next(lo, hi + 1);
 
-            // 4. 8 邻扩张
+            // 4. 先在临时列表规划（不写网格）：随机取已占格作锚点，朝随机 8 邻试探扩张
             var cells = new List<Vector2Int> { start.Value };
-            grid.SetTile(start.Value.x, start.Value.y, ore);
-            TotalCellsPlanted++;
-
             int guard = targetSize * growthBackoffPerCell;
             while (cells.Count < targetSize && guard-- > 0)
             {
-                // 从已占格中随机取一个，朝随机 8 邻方向试探
                 var anchor = cells[rng.Next(cells.Count)];
                 int dx = rng.Next(-1, 2);
                 int dy = rng.Next(-1, 2);
@@ -198,11 +204,21 @@ namespace Ashfall
                 if (cells.Contains(new Vector2Int(nx, ny))) continue;
 
                 cells.Add(new Vector2Int(nx, ny));
-                grid.SetTile(nx, ny, ore);
+            }
+
+            // 5. 事务化提交：不足 veinMinSize → 整体判失败，网格零改动、零残留
+            if (cells.Count < lo)
+            {
+                SubMinDiscards++;
+                return;
+            }
+            foreach (var c in cells)
+            {
+                grid.SetTile(c.x, c.y, ore);
                 TotalCellsPlanted++;
             }
 
-            // 5. 记录（含包围盒）
+            // 6. 记录（含包围盒）
             var rec = new OreVeinRecord
             {
                 bandName = band.bandName ?? band.minDepth + "-" + band.maxDepth,
