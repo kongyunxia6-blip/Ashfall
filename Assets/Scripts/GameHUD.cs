@@ -5,7 +5,8 @@ namespace Ashfall
     /// <summary>
     /// 原型 HUD：用 IMGUI 绘制，零 UI 依赖 —— 挂到场景任意物体上就能看到全部状态。
     /// 后续可替换为 uGUI / TextMeshPro（保持读取同样的公开属性即可）。
-    /// 操作：U 开关升级商店（需在地表），1~6 购买对应部件。
+    /// 操作：U 开关升级商店（DEV-006 起需靠近装备工作台；场景无工作台时回退地表任意位置），1~6 购买对应部件。
+    /// 右侧面板按当前所在功能区显示对应提示（卖矿 / 升级 / 补给），不串台。
     /// </summary>
     public class GameHUD : MonoBehaviour
     {
@@ -24,11 +25,27 @@ namespace Ashfall
 
         void Update()
         {
-            if (Input.GetKeyDown(shopToggleKey)) shopOpen = !shopOpen;
-            if (!shopOpen) return;
-
             var gm = GameManager.Instance;
-            if (gm == null || !gm.IsAtSurface) return;
+            bool canShop = gm != null && gm.IsAtSurface
+                && (UpgradeWorkbench.PlayerInRange || !UpgradeWorkbench.AnyExists);
+
+            if (Input.GetKeyDown(shopToggleKey))
+            {
+                if (canShop) shopOpen = !shopOpen;
+                else
+                {
+                    if (gm != null && gm.IsAtSurface)
+                        gm.LastServiceMessage = "升级需靠近装备工作台";
+                    shopOpen = false;
+                }
+            }
+            else if (shopOpen && !canShop)
+            {
+                shopOpen = false;   // 离开工作台范围 / 离开地表：自动关面板
+            }
+
+            if (!shopOpen) return;
+            if (gm == null || gm.Upgrades == null) return;
 
             if (Input.GetKeyDown(KeyCode.Alpha1)) TryBuy(UpgradePart.Drill);
             if (Input.GetKeyDown(KeyCode.Alpha2)) TryBuy(UpgradePart.Hull);
@@ -151,15 +168,40 @@ namespace Ashfall
             if (gm.IsAtSurface)
             {
                 GUI.color = new Color(0.4f, 1f, 0.5f);
-                GUILayout.Label("【地表基地】自动补给 / 出售需到终端", labelStyle);
+                GUILayout.Label("【地表据点 Surface Hub】", labelStyle);
                 GUI.color = Color.white;
                 GUILayout.Space(4);
+
+                int cargoVal = p != null ? p.CargoValue : 0;
+                int fuelNow = p != null ? Mathf.RoundToInt(p.Fuel) : 0;
+                int fuelMax = p != null ? Mathf.RoundToInt(p.MaxFuel) : 0;
+                bool anyZone = false;
+
+                if (SurfaceBase.PlayerInRange)
+                {
+                    GUILayout.Label("◆ 登陆舱 / 返航安全区（已安全返回）", labelStyle);
+                    anyZone = true;
+                }
                 if (SellTerminal.PlayerInRange)
-                    GUILayout.Label($"按 E 出售全部矿物（估值 ${(p != null ? p.CargoValue : 0)}）", labelStyle);
-                else
-                    GUILayout.Label($"靠近出售终端按 {KeyCode.E} 卖矿", labelStyle);
-                GUILayout.Space(4);
-                GUILayout.Label($"按 {shopToggleKey} {(shopOpen ? "关闭" : "打开")}升级商店", labelStyle);
+                {
+                    GUILayout.Label($"◆ 出售终端：按 {KeyCode.E} 出售全部（估值 ${cargoVal}）", labelStyle);
+                    anyZone = true;
+                }
+                if (UpgradeWorkbench.PlayerInRange)
+                {
+                    GUILayout.Label($"◆ 装备工作台：按 {shopToggleKey} {(shopOpen ? "关闭" : "打开")}升级商店", labelStyle);
+                    anyZone = true;
+                }
+                if (FuelStation.PlayerInRange)
+                {
+                    GUILayout.Label($"◆ 能源补给点：按 {KeyCode.E} 加油补给", labelStyle);
+                    anyZone = true;
+                }
+
+                GUILayout.Space(2);
+                GUILayout.Label($"货舱估值 ${cargoVal} · 现金 ${gm.Cash} · 燃料 {fuelNow}/{fuelMax}", labelStyle);
+                if (!anyZone)
+                    GUILayout.Label("移动至功能区：卖矿 → 补给 → 升级；右侧为下矿入口", labelStyle);
             }
             else
             {
