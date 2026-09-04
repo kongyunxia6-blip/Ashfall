@@ -36,7 +36,8 @@ namespace Ashfall
         [Tooltip("坑口半宽（与 DigGrid.surfaceOpeningHalfWidth 一致）")]
         public int openingHalfWidth = 3;
 
-        void Start()
+        /// <summary>布局重放入口（protected virtual：供 DEV-009 DepthRegionV1TestLayout 派生复用同一实现）。</summary>
+        protected virtual void Start()
         {
             if (grid == null) grid = GetComponent<DigGrid>();
             if (grid == null || grid.database == null)

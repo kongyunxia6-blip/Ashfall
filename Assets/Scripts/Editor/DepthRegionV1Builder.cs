@@ -7,44 +7,37 @@ using UnityEngine.Tilemaps;
 namespace Ashfall.EditorTools
 {
     /// <summary>
-    /// 一键搭建 DEV-008 地下探索空间验收场景。
-    /// 用法：菜单栏 → 灰烬之下 → 搭建 DEV-008 地下探索空间测试场景
+    /// 一键搭建 DEV-009 深度 / 区域推进验收场景。
+    /// 用法：菜单栏 → 灰烬之下 → 搭建 DEV-009 深度/区域推进测试场景
     ///
-    /// 场景内容（生成顺序 = Base Strata → Underground Space Pass → Ore Vein Pass）：
-    ///  - DigGrid 同时挂 UndergroundSpaceGenerator + OreVeinGenerator：
-    ///    基础地层 = 纯填充（spaceMode），逐格 caveChance 椒盐打洞关闭；
-    ///    space pass 先挖出连贯空间（Pocket/Tunnel/Branch/DeadEnd-SmallRoom），
-    ///    ore pass 再基于剩余实心地层沿墙体种矿脉；
-    ///  - 三条空间带 Shallow 5..21 / Mid 22..43 / Deep 44..62，各带独立结构数量/尺寸
-    ///    （浅=少而小、中=岔路出现、深=大而复杂）→ 深度差异可观测；
-    ///  - 三条矿脉带（与 DEV-007 同界）Shallow 3..21 / Mid 22..43 / Deep 44..62；
-    ///  - 保留区（空间 + 矿脉共用 OreReservedRect，集中配置）：地表 Hub 带 y0..2、
-    ///    ScannerPad 无矿基线区 x2..17 y16..25；
-    ///  - 中心下矿坑口（±3 列贯穿 y0..2），玩家出生在坑口；功能区同 DEV-006/007
-    ///    （x6 Lander / x14 Sell / x22 Workbench / x30 Fuel），SurfaceHubZone 覆盖地表带；
-    ///  - DigGrid 56x72、seed 固定、enableFallingRocks=false、breakDuration=0（确定性验收）。
+    /// 基线：DEV-008 地下探索空间 V1（c3f175c）。
+    /// 场景结构（与 DEV-008 验收场景同款，仅新增「区域语义层」）：
+    ///  - DigGrid 56x72、seed 固定、enableFallingRocks=false、breakDuration=0；
+    ///  - Base Strata → Space Pass → Ore Vein Pass 顺序不变（spaceMode）；
+    ///  - UndergroundSpaceGenerator + OreVeinGenerator 的带边界【全部取自 DepthRegionLayout】
+    ///    （唯一来源：Shallow 3..21 / Mid 22..43 / Deep 44..62；空间带 Shallow 从 spaceStartY=5 起），
+    ///    本 Builder 不再出现任何裸边界数字；
+    ///  - DepthRegionProgression 挂在 GameManager 上（只读区域状态 + 首次进入事件/提示）；
+    ///  - GameHUD.regionProgression 指向它 → 左上显示「深度 x m | 区域：xx」，并画首次进入横幅；
+    ///  - 保留区/功能区/中心坑口同 DEV-008；
+    ///  - 地表带布局由 DepthRegionV1TestLayout 重放（复用 UndergroundSpaceV1TestLayout 实现）。
     ///
-    /// 资产：全部复用既有资产，本 Builder 不创建任何新资产。
+    /// 不破坏 DEV-006/007/008 原测试场景。
     /// </summary>
-    public static class UndergroundSpaceV1Builder
+    public static class DepthRegionV1Builder
     {
-        const string ScenePath = "Assets/Scenes/UndergroundSpaceV1Test.unity";
+        const string ScenePath = "Assets/Scenes/DepthRegionV1Test.unity";
         const string SceneFolder = "Assets/Scenes";
         const string DataFolder = "Assets/Ashfall/Data";
 
-        // 网格尺寸（Issue §10 建议宽 50~70 / 深 60~90）
+        // 网格尺寸（Issue §10：与 DEV-008 同量级）
         const int GridWidth = 56;
         const int GridDepth = 72;
 
-        // 空间带/矿脉带边界：DEV-009 起统一取自 DepthRegionLayout（唯一来源），禁止再散落裸数字。
-        //  ORE 带   = [region.minDepth,   region.maxDepth]（Shallow 3..21 / Mid 22..43 / Deep 44..62）；
-        //  SPACE 带 = [region.spaceStartY, region.maxDepth]（Shallow 5..21 / Mid 22..43 / Deep 44..62，
-        //              Shallow 空间起点 5 为贴近地表带的既有生成细节，已收入 region 定义）。
-
-        // 固定 seed（验收 seed）
+        // 固定 seed（沿用 DEV-008 验收 seed：世界已知、坑口下存在 Pocket 可作为真实下潜目标）
         public const int AcceptanceSeed = 20260908;
 
-        [MenuItem("灰烬之下/搭建 DEV-008 地下探索空间测试场景")]
+        [MenuItem("灰烬之下/搭建 DEV-009 深度/区域推进测试场景")]
         public static void Build()
         {
             var db = AssetDatabase.LoadAssetAtPath<TileDatabase>($"{DataFolder}/TileDatabase.asset");
@@ -55,7 +48,7 @@ namespace Ashfall.EditorTools
             var dirt = AssetDatabase.LoadAssetAtPath<TileDefinition>($"{DataFolder}/Dirt_泥土.asset");
             if (db == null || iron == null || copper == null || tin == null || silver == null || dirt == null)
             {
-                Debug.LogError("[DEV-008] 必要资产缺失（Iron/Copper/Tin/Silver/Dirt/DB）。请先运行 Tools/Ashfall/一键生成默认方块与数据库");
+                Debug.LogError("[DEV-009] 必要资产缺失（Iron/Copper/Tin/Silver/Dirt/DB）。请先运行 Tools/Ashfall/一键生成默认方块与数据库");
                 return;
             }
 
@@ -83,7 +76,7 @@ namespace Ashfall.EditorTools
             var bgRenderer = bgGo.AddComponent<TilemapRenderer>();
             bgRenderer.sortingOrder = 0;
 
-            // ---- 3. DigGrid（spaceMode + veinMode）----
+            // ---- 3. DigGrid（spaceMode + veinMode；带边界唯一来源 = DepthRegionLayout）----
             var digGrid = fgGo.AddComponent<DigGrid>();
             digGrid.tilemap = fgTilemap;
             digGrid.backgroundTilemap = bgTilemap;
@@ -96,20 +89,20 @@ namespace Ashfall.EditorTools
             digGrid.breakDuration = 0f;
             digGrid.surfaceOpeningHalfWidth = 3; // 中心坑口 ±3
 
-            // 共享保留区（空间与矿脉都用同一套，避免第二套 magic rect）
+            // 共享保留区（空间与矿脉同一套）
             OreReservedRect[] sharedReserved =
             {
                 new OreReservedRect { label = "SurfaceHub 地表带", x = 0, y = 0, w = GridWidth, h = 3 },
                 new OreReservedRect { label = "ScannerPad 无矿基线区", x = 2, y = 16, w = 16, h = 10 },
             };
 
-            // ---- 3a. UndergroundSpaceGenerator（DEV-008 space pass）----
+            // ---- 3a. UndergroundSpaceGenerator（DEV-008 space pass；边界来自 DepthRegionLayout）----
             var spaceGen = fgGo.AddComponent<UndergroundSpaceGenerator>();
             spaceGen.grid = digGrid;
-            spaceGen.seedOverride = -1;            // 跟随 digGrid.seed → 地层+空间+矿脉整体可复现
+            spaceGen.seedOverride = -1;            // 跟随 digGrid.seed
             spaceGen.bands = new[]
             {
-                // Shallow：空腔少而小、通道短、无岔路倾向 → 第一次下矿容易理解
+                // Shallow：空腔少而小（空间带起点 spaceStartY=5 为贴近地表带的既有细节）
                 new UndergroundSpaceBand
                 {
                     bandName = "Shallow", minDepth = DepthRegionLayout.Shallow.spaceStartY, maxDepth = DepthRegionLayout.Shallow.maxDepth,
@@ -119,7 +112,7 @@ namespace Ashfall.EditorTools
                     branchTarget = 1, smallRoomTarget = 2,
                     branchSideMin = 2, branchSideMax = 3,
                 },
-                // Mid：空间频率提高、房间略大、开始出现明显岔路
+                // Mid：空间频率提高、房间略大、明显岔路
                 new UndergroundSpaceBand
                 {
                     bandName = "Mid", minDepth = DepthRegionLayout.Mid.minDepth, maxDepth = DepthRegionLayout.Mid.maxDepth,
@@ -129,7 +122,7 @@ namespace Ashfall.EditorTools
                     branchTarget = 2, smallRoomTarget = 1,
                     branchSideMin = 2, branchSideMax = 4,
                 },
-                // Deep：结构更复杂、更大的 pocket / 更长通道，仍不做大型洞穴世界
+                // Deep：结构更复杂、更大 pocket / 更长通道
                 new UndergroundSpaceBand
                 {
                     bandName = "Deep", minDepth = DepthRegionLayout.Deep.minDepth, maxDepth = DepthRegionLayout.Deep.maxDepth,
@@ -143,7 +136,7 @@ namespace Ashfall.EditorTools
             spaceGen.reservedRects = sharedReserved;
             digGrid.undergroundSpaceGenerator = spaceGen;
 
-            // ---- 3b. OreVeinGenerator（DEV-007 ore pass，带界与 DEV-007 相同）----
+            // ---- 3b. OreVeinGenerator（DEV-007 ore pass；Ore 带 = region.min..max）----
             var oreGen = fgGo.AddComponent<OreVeinGenerator>();
             oreGen.grid = digGrid;
             oreGen.seedOverride = -1;
@@ -174,8 +167,8 @@ namespace Ashfall.EditorTools
             oreGen.reservedRects = sharedReserved;
             digGrid.oreVeinGenerator = oreGen;
 
-            // 运行时布局重放（地表带 + 中心坑口）
-            var layout = fgGo.AddComponent<UndergroundSpaceV1TestLayout>();
+            // 运行时布局重放（地表带 + 中心坑口；复用 DEV-008 重放实现）
+            var layout = fgGo.AddComponent<DepthRegionV1TestLayout>();
             layout.grid = digGrid;
             layout.dirt = dirt;
             layout.spawnX = GridWidth / 2;
@@ -191,10 +184,10 @@ namespace Ashfall.EditorTools
             bgTex.SetPixel(0, 0, Color.white);
             bgTex.Apply();
             var bgSprite = Sprite.Create(bgTex, new Rect(0, 0, 1, 1), new Vector2(0.5f, 0.5f), 1f);
-            bgSprite.name = "DEV008_DirtBg";
+            bgSprite.name = "DEV009_DirtBg";
             var bgTile = ScriptableObject.CreateInstance<Tile>();
             bgTile.sprite = bgSprite;
-            bgTile.name = "DEV008_DirtBg";
+            bgTile.name = "DEV009_DirtBg";
             bgTile.flags = TileFlags.None;
 
             for (int y = 0; y < digGrid.depth; y++)
@@ -231,18 +224,25 @@ namespace Ashfall.EditorTools
 
             var feel = playerGo.AddComponent<MiningFeelController>();
             feel.grid = digGrid;
-            feel.attackInterval = 0.22f;   // 稍快，验收路径更顺
+            feel.attackInterval = 0.22f;
             feel.showTargetHighlight = true;
 
             var scanner = playerGo.AddComponent<OreScanner>();
             scanner.scanRadius = 4;
             scanner.scanKey = KeyCode.R;
 
-            // ---- 6. 总控 + HUD + 背包 + 表现 ----
+            // ---- 6. 总控 + HUD + 背包 + 表现 + 【DEV-009 区域推进】----
             var gmGo = new GameObject("GameManager");
             gmGo.AddComponent<UpgradeSystem>().costMultiplier = 0.4f;
-            gmGo.AddComponent<GameHUD>();
             gmGo.AddComponent<InventoryPanel>();
+
+            // DEV-009：区域推进（只读状态；同一物体上供 GameHUD GetComponent 兜底）
+            var prog = gmGo.AddComponent<DepthRegionProgression>();
+            prog.vehicle = vehicle;
+            prog.grid = digGrid;
+
+            var hud = gmGo.AddComponent<GameHUD>();
+            hud.regionProgression = prog;
 
             var gm = gmGo.AddComponent<GameManager>();
             gm.startingCash = 200;
@@ -252,7 +252,7 @@ namespace Ashfall.EditorTools
             gmGo.AddComponent<BlockDropHook>().grid = digGrid;
             gmGo.AddComponent<BlockVisualController>().grid = digGrid;
 
-            // ---- 7. 地表功能区（与 DEV-006/007 相同布局）----
+            // ---- 7. 地表功能区（与 DEV-006/007/008 相同布局）----
             var hubGo = new GameObject("SurfaceHub_Zones");
 
             var hubCenter = digGrid.GridToWorld(GridWidth / 2, layout.surfaceY);
@@ -278,19 +278,20 @@ namespace Ashfall.EditorTools
             var fuel = NewZoneObject("FuelStation", hubGo.transform, digGrid, 30, layout.surfaceY, new Vector2(2f, 2f));
             fuel.AddComponent<FuelStation>();
 
-            var signGo = new GameObject("UndergroundSpace_Signs");
+            var signGo = new GameObject("DepthRegion_Signs");
             signGo.transform.SetParent(hubGo.transform);
 
             MakeSign(signGo.transform, "登陆舱 / 返航安全区", digGrid.GridToWorld(6, layout.surfaceY), new Color(0.5f, 1f, 0.6f));
             MakeSign(signGo.transform, "出售终端", digGrid.GridToWorld(14, layout.surfaceY), new Color(1f, 0.85f, 0.35f));
             MakeSign(signGo.transform, "装备工作台", digGrid.GridToWorld(22, layout.surfaceY), new Color(0.45f, 0.9f, 1f));
             MakeSign(signGo.transform, "能源补给点", digGrid.GridToWorld(30, layout.surfaceY), new Color(1f, 0.65f, 0.3f));
-            MakeSign(signGo.transform, "↓ 下矿坑口（垂直下挖 → 探索自然空间）", digGrid.GridToWorld(GridWidth / 2, layout.surfaceY + 2), Color.white);
+            MakeSign(signGo.transform, "↓ 下矿坑口（垂直下挖穿越 浅层→中层→深层）", digGrid.GridToWorld(GridWidth / 2, layout.surfaceY + 2), Color.white);
             MakeSign(signGo.transform, "Scanner: 按 R 扫描附近矿脉（只读提示）", digGrid.GridToWorld(GridWidth / 2, 8), new Color(0.8f, 0.9f, 1f));
 
-            MakeSign(signGo.transform, "── Shallow 浅层 (y5..21) ──", digGrid.GridToWorld(8, DepthRegionLayout.Shallow.maxDepth), new Color(0.7f, 1f, 0.7f));
-            MakeSign(signGo.transform, "── Mid 中层 (y22..43) ──", digGrid.GridToWorld(8, DepthRegionLayout.Mid.maxDepth), new Color(1f, 1f, 0.7f));
-            MakeSign(signGo.transform, "── Deep 深层 (y44..62) ──", digGrid.GridToWorld(8, DepthRegionLayout.Deep.maxDepth), new Color(1f, 0.75f, 0.7f));
+            // 区域界标（边界值取自 DepthRegionLayout —— 与 Ore/Space band、运行时判定同一来源）
+            MakeSign(signGo.transform, "── 浅层 Shallow (y3..21) ──", digGrid.GridToWorld(8, DepthRegionLayout.Shallow.maxDepth), new Color(0.7f, 1f, 0.7f));
+            MakeSign(signGo.transform, "── 中层 Mid (y22..43) ──", digGrid.GridToWorld(8, DepthRegionLayout.Mid.maxDepth), new Color(1f, 1f, 0.7f));
+            MakeSign(signGo.transform, "── 深层 Deep (y44..62) ──", digGrid.GridToWorld(8, DepthRegionLayout.Deep.maxDepth), new Color(1f, 0.75f, 0.7f));
 
             // ---- 8. 相机 ----
             var camGo = new GameObject("Main Camera");
@@ -332,9 +333,11 @@ namespace Ashfall.EditorTools
 
             Selection.activeGameObject = playerGo;
 
-            Debug.Log($"[DEV-008] 地下探索空间测试场景已搭建：{ScenePath}\n" +
-                      $"seed={digGrid.seed}，网格 {GridWidth}x{GridDepth}，空间带 Shallow({DepthRegionLayout.Shallow.spaceStartY}..{DepthRegionLayout.Shallow.maxDepth})/" +
-                      $"Mid({DepthRegionLayout.Mid.minDepth}..{DepthRegionLayout.Mid.maxDepth})/" +
+            Debug.Log($"[DEV-009] 深度/区域推进测试场景已搭建：{ScenePath}\n" +
+                      $"seed={digGrid.seed}，网格 {GridWidth}x{GridDepth}，" +
+                      $"Region: Surface(y0..{DepthRegionLayout.Surface.maxDepth}) / " +
+                      $"Shallow({DepthRegionLayout.Shallow.minDepth}..{DepthRegionLayout.Shallow.maxDepth}) / " +
+                      $"Mid({DepthRegionLayout.Mid.minDepth}..{DepthRegionLayout.Mid.maxDepth}) / " +
                       $"Deep({DepthRegionLayout.Deep.minDepth}..{DepthRegionLayout.Deep.maxDepth})；" +
                       $"spaces={spaceGen.Spaces.Count} empty={spaceGen.TotalEmptyCells}，" +
                       $"veins={oreGen.Veins.Count} planted={oreGen.TotalCellsPlanted}。" +

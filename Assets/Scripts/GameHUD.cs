@@ -14,6 +14,10 @@ namespace Ashfall
         public bool showHelp = true;
         public KeyCode shopToggleKey = KeyCode.U;
 
+        [Header("DEV-009 深度/区域（留空 = 场景无区域系统，回退旧「当前深度」显示）")]
+        [Tooltip("区域推进系统。赋值时左上显示『深度 x m | 区域：xx』与首次进入横幅")]
+        public DepthRegionProgression regionProgression;
+
         bool shopOpen;
         bool stylesReady;
         GUIStyle labelStyle;
@@ -111,11 +115,34 @@ namespace Ashfall
             var p = gm != null ? gm.Player : null;
 
             // 左上：经济与深度
-            GUILayout.BeginArea(new Rect(12, 12, 280, 110));
+            GUILayout.BeginArea(new Rect(12, 12, 300, 120));
             GUILayout.Label($"现金   ${(gm != null ? gm.Cash : 0)}", labelStyle);
-            GUILayout.Label($"当前深度   {(p != null ? p.CurrentDepth : 0)} m", labelStyle);
-            GUILayout.Label($"最深纪录   {(gm != null ? gm.MaxDepthReached : 0)} m", labelStyle);
+            var prog = regionProgression != null ? regionProgression
+                : (gm != null ? gm.GetComponent<DepthRegionProgression>() : null);
+            if (prog != null)
+            {
+                // DEV-009：区域语义显示（地表显示 0m；向下单调增加；本次最深/最深纪录并列）
+                var regName = prog.CurrentRegion != null ? prog.CurrentRegion.displayName : "-";
+                GUILayout.Label($"深度   {prog.DisplayDepth} m | 区域：{regName}", labelStyle);
+                GUILayout.Label($"本次最深   {prog.MaxDepthThisRun} m · 最深纪录   {prog.MaxDepthEver} m", labelStyle);
+            }
+            else
+            {
+                // 旧场景回退（无 DepthRegionProgression）
+                GUILayout.Label($"当前深度   {(p != null ? p.CurrentDepth : 0)} m", labelStyle);
+                GUILayout.Label($"最深纪录   {(gm != null ? gm.MaxDepthReached : 0)} m", labelStyle);
+            }
             GUILayout.EndArea();
+
+            // DEV-009：首次进入区域横幅（只出现一次，持续 announceDuration 秒；不遮挡核心画面）
+            if (prog != null && prog.AnnounceTimeLeft > 0f && !string.IsNullOrEmpty(prog.RegionEnterAnnounce))
+            {
+                float fade = Mathf.Clamp01(prog.AnnounceTimeLeft / 0.4f);
+                GUI.color = new Color(1f, 0.9f, 0.35f, fade);
+                GUI.Label(new Rect(0, Screen.height * 0.16f, Screen.width, 36f),
+                    prog.RegionEnterAnnounce, centerStyle);
+                GUI.color = Color.white;
+            }
 
             // 左下：三条状态
             if (p != null)
