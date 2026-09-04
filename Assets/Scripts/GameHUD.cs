@@ -151,8 +151,13 @@ namespace Ashfall
             if (gm.IsAtSurface)
             {
                 GUI.color = new Color(0.4f, 1f, 0.5f);
-                GUILayout.Label("【地表基地】自动卖矿 / 加油 / 维修", labelStyle);
+                GUILayout.Label("【地表基地】自动补给 / 出售需到终端", labelStyle);
                 GUI.color = Color.white;
+                GUILayout.Space(4);
+                if (SellTerminal.PlayerInRange)
+                    GUILayout.Label($"按 E 出售全部矿物（估值 ${(p != null ? p.CargoValue : 0)}）", labelStyle);
+                else
+                    GUILayout.Label($"靠近出售终端按 {KeyCode.E} 卖矿", labelStyle);
                 GUILayout.Space(4);
                 GUILayout.Label($"按 {shopToggleKey} {(shopOpen ? "关闭" : "打开")}升级商店", labelStyle);
             }

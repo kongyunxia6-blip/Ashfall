@@ -43,6 +43,10 @@ namespace Ashfall
         [Tooltip("安全深度每级增量。v2：250 + 70×(Lv-1)")]
         public float safeDepthPerRadiatorLevel = 70f;
 
+        [Header("平衡（CoreLoop 测试场景可调，默认 1 不影响既有场景）")]
+        [Tooltip("全局升级价格乘数。1 = 原价。测试/调试可调低以便短循环内可购买，不改公式结构")]
+        [Min(0.01f)] public float costMultiplier = 1f;
+
         // ---------- 派生属性 ----------
 
         /// <summary>钻头等级 = 能挖穿的最高硬度</summary>
@@ -143,7 +147,7 @@ namespace Ashfall
         {
             if (IsMaxLevel(part)) return 0;
             int level = GetLevel(part);
-            return Mathf.RoundToInt(GetBaseCost(part) * Mathf.Pow(8f, level - 1));
+            return Mathf.RoundToInt(GetBaseCost(part) * costMultiplier * Mathf.Pow(8f, level - 1));
         }
 
         public string GetDisplayName(UpgradePart part)
