@@ -33,10 +33,8 @@ namespace Ashfall.EditorTools
         const int GridWidth = 52;
         const int GridDepth = 66;
 
-        // 深度带边界（与 OreDepthBand 字段闭区间一致）
-        const int ShallowMin = 3, ShallowMax = 21;
-        const int MidMin = 22, MidMax = 43;
-        const int DeepMin = 44, DeepMax = 62;
+        // 深度带边界：DEV-009 起统一取自 DepthRegionLayout（唯一来源），禁止再散落裸数字。
+        //  ORE 带边界 = [region.minDepth, region.maxDepth]（Shallow 3..21 / Mid 22..43 / Deep 44..62）。
 
         [MenuItem("灰烬之下/搭建 DEV-007 矿脉分层测试场景")]
         public static void Build()
@@ -98,7 +96,7 @@ namespace Ashfall.EditorTools
                 new OreDepthBand
                 {
                     bandName = "Shallow",
-                    minDepth = ShallowMin, maxDepth = ShallowMax,
+                    minDepth = DepthRegionLayout.Shallow.minDepth, maxDepth = DepthRegionLayout.Shallow.maxDepth,
                     ores = new[] { iron, tin, copper },
                     weights = new[] { 45f, 40f, 15f },
                     veinMinSize = 2, veinMaxSize = 4,
@@ -107,7 +105,7 @@ namespace Ashfall.EditorTools
                 new OreDepthBand
                 {
                     bandName = "Mid",
-                    minDepth = MidMin, maxDepth = MidMax,
+                    minDepth = DepthRegionLayout.Mid.minDepth, maxDepth = DepthRegionLayout.Mid.maxDepth,
                     ores = new[] { copper, iron, tin, silver },
                     weights = new[] { 55f, 25f, 15f, 5f },
                     veinMinSize = 3, veinMaxSize = 6,
@@ -116,7 +114,7 @@ namespace Ashfall.EditorTools
                 new OreDepthBand
                 {
                     bandName = "Deep",
-                    minDepth = DeepMin, maxDepth = DeepMax,
+                    minDepth = DepthRegionLayout.Deep.minDepth, maxDepth = DepthRegionLayout.Deep.maxDepth,
                     ores = new[] { copper, iron, silver, tin },
                     weights = new[] { 62f, 15f, 15f, 8f },
                     veinMinSize = 4, veinMaxSize = 8,
@@ -265,9 +263,9 @@ namespace Ashfall.EditorTools
             MakeSign(signGo.transform, "下矿口（手工铁/铜/锡 柱）→", digGrid.GridToWorld(40, layout.surfaceY), Color.white);
 
             // 深度带标记（便于观察浅/中/深）
-            MakeSign(signGo.transform, "── Shallow 浅层带 (y3..21) ──", digGrid.GridToWorld(6, ShallowMax), new Color(0.7f, 1f, 0.7f));
-            MakeSign(signGo.transform, "── Mid 中层带 (y22..43) ──", digGrid.GridToWorld(6, MidMax), new Color(1f, 1f, 0.7f));
-            MakeSign(signGo.transform, "── Deep 深层带 (y44..62) ──", digGrid.GridToWorld(6, DeepMax), new Color(1f, 0.75f, 0.7f));
+            MakeSign(signGo.transform, "── Shallow 浅层带 (y3..21) ──", digGrid.GridToWorld(6, DepthRegionLayout.Shallow.maxDepth), new Color(0.7f, 1f, 0.7f));
+            MakeSign(signGo.transform, "── Mid 中层带 (y22..43) ──", digGrid.GridToWorld(6, DepthRegionLayout.Mid.maxDepth), new Color(1f, 1f, 0.7f));
+            MakeSign(signGo.transform, "── Deep 深层带 (y44..62) ──", digGrid.GridToWorld(6, DepthRegionLayout.Deep.maxDepth), new Color(1f, 0.75f, 0.7f));
 
             // ---- 8. 相机 ----
             var camGo = new GameObject("Main Camera");
@@ -310,7 +308,9 @@ namespace Ashfall.EditorTools
             Selection.activeGameObject = playerGo;
 
             Debug.Log($"[DEV-007] 矿脉分层测试场景已搭建：{ScenePath}\n" +
-                      $"深度带 Shallow({ShallowMin}..{ShallowMax}) / Mid({MidMin}..{MidMax}) / Deep({DeepMin}..{DeepMax})，" +
+                      $"深度带 Shallow({DepthRegionLayout.Shallow.minDepth}..{DepthRegionLayout.Shallow.maxDepth}) / " +
+                      $"Mid({DepthRegionLayout.Mid.minDepth}..{DepthRegionLayout.Mid.maxDepth}) / " +
+                      $"Deep({DepthRegionLayout.Deep.minDepth}..{DepthRegionLayout.Deep.maxDepth})，" +
                       $"seed={digGrid.seed}，veins={gen.Veins.Count}，grid 实际矿格待 MCP 统计。" +
                       $"功能区 x=6/14/22/30；手工矿柱 x=36/40/44（铁/铜/锡）；ScannerPad(x2..17,y16..25) 无矿保留区。");
         }
