@@ -20,8 +20,15 @@ namespace Ashfall
         /// <summary>半径内矿物位置清单（供方向提示 / 测试；不暴露精确坐标给玩家 UI，测试可读）。</summary>
         public readonly List<Vector2Int> signalCells = new List<Vector2Int>();
 
-        /// <summary>半径内出现的矿种（去重，顺序 = 首次发现顺序）。</summary>
+        /// <summary>半径内出现的矿种（去重，顺序 = 首次发现顺序；只作展示顺序，计数请看 oreCounts）。</summary>
         public readonly List<TileDefinition> oreTypes = new List<TileDefinition>();
+
+        /// <summary>
+        /// 半径内各矿种的【真实格数】（Key = 矿种，Value = 该矿种出现的格数）。
+        /// 与 totalSignals 一致（Σ oreCounts == totalSignals），供 HUD 显示与测试断言；
+        /// 修正：早期版误把去重后的 oreTypes 当计数用（5 铁 + 3 铜会错显示成 Iron×1 / Copper×1）。
+        /// </summary>
+        public readonly Dictionary<TileDefinition, int> oreCounts = new Dictionary<TileDefinition, int>();
 
         /// <summary>最近矿的网格坐标（无矿时为 null）。</summary>
         public Vector2Int? nearestCell;
@@ -46,16 +53,15 @@ namespace Ashfall
                 return;
             }
 
-            // 各矿种计数
-            var counts = new Dictionary<string, int>();
+            // 各矿种真实格数（Key 顺序无关；用 oreTypes 的顺序保证展示稳定）
+            var parts = new List<string>();
             foreach (var t in oreTypes)
             {
                 if (t == null) continue;
-                counts.TryGetValue(t.displayName, out var c);
-                counts[t.displayName] = c + 1;
+                int n = 0;
+                if (oreCounts != null) oreCounts.TryGetValue(t, out n);
+                parts.Add($"{t.displayName}×{n}");
             }
-            var parts = new List<string>();
-            foreach (var kv in counts) parts.Add($"{kv.Key}×{kv.Value}");
             string types = string.Join(" / ", parts);
 
             if (nearestCell.HasValue)
@@ -168,6 +174,9 @@ namespace Ashfall
                     res.signalCells.Add(new Vector2Int(x, y));
                     res.totalSignals++;
                     if (!res.oreTypes.Contains(def)) res.oreTypes.Add(def);
+                    int curCnt = 0;
+                    res.oreCounts.TryGetValue(def, out curCnt);
+                    res.oreCounts[def] = curCnt + 1;
 
                     int dist = Mathf.Max(Mathf.Abs(x - center.x), Mathf.Abs(y - center.y));
                     if (dist < best)
