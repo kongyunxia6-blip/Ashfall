@@ -10,6 +10,9 @@ namespace Ashfall
     ///  - 规则：满 Fuel 不重复扣费（返回 0）；Cash 不足时只补可支付的部分；
     ///  - HUD 通过 FuelStation.PlayerInRange 显示「按 E 加油」；结算结果写 LastServiceMessage。
     ///
+    /// DEV-006 第二轮：每实例计数收拢到 ZonePresence —— 正常 OnTriggerExit 逐 Collider 配对，
+    /// Disable/Destroy 走 ReleaseAll 一次性归还本实例全部占用（多 Collider 玩家也不残留全局计数）。
+    ///
     /// 职责边界：只管燃料补给，不卖矿（SellTerminal）、不卖升级（UpgradeWorkbench）。
     /// 挂在哪：地表补给站占位物上，需带 Collider2D（isTrigger 自动设置）。
     /// </summary>
@@ -22,7 +25,8 @@ namespace Ashfall
         [Tooltip("补给按键")]
         public KeyCode fuelKey = KeyCode.E;
 
-        int localCount;
+        /// <summary>本实例在场计数（ZonePresence：逐 Collider 配对；禁用/销毁时 ReleaseAll 一次归还）。</summary>
+        readonly ZonePresence presence = new ZonePresence(HubZoneKind.Fuel);
 
         void Awake()
         {
@@ -35,7 +39,7 @@ namespace Ashfall
             var p = GameManager.Instance != null ? GameManager.Instance.Player : null;
             if (p == null || p.IsDead) return;
 
-            if (localCount > 0 && Input.GetKeyDown(fuelKey))
+            if (presence.Present && Input.GetKeyDown(fuelKey))
                 TryRefuel(p);
         }
 
@@ -80,26 +84,17 @@ namespace Ashfall
         void OnTriggerEnter2D(Collider2D other)
         {
             if (other.GetComponent<DrillVehicle>() == null) return;
-            if (localCount == 0) HubZoneTracker.Enter(HubZoneKind.Fuel);
-            localCount++;
+            presence.Enter();
         }
 
         void OnTriggerExit2D(Collider2D other)
         {
             if (other.GetComponent<DrillVehicle>() == null) return;
-            ReleaseLocal();
+            presence.Exit();
         }
 
-        void OnDisable() => ReleaseLocal();
+        void OnDisable() => presence.ReleaseAll();
 
-        void OnDestroy() => ReleaseLocal();
-
-        /// <summary>归还本实例的在场计数（幂等；场景卸载/禁用/销毁后不残留 true）。</summary>
-        void ReleaseLocal()
-        {
-            if (localCount <= 0) return;
-            localCount--;
-            if (localCount == 0) HubZoneTracker.Exit(HubZoneKind.Fuel);
-        }
+        void OnDestroy() => presence.ReleaseAll();
     }
 }

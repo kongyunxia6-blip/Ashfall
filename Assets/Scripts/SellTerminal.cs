@@ -9,11 +9,13 @@ namespace Ashfall
     /// 一次清空货舱并按每种矿物自己的 value 计价 → Cash 增加 → 货舱清空。
     /// 空舱 / 已卖完再按 E 不产生任何结算（天然防重复出售）。
     ///
-    /// DEV-006：静态生命周期修复 —— 在场状态不再由各实例各自维护再写共享 bool，
-    /// 改由 HubZoneTracker 按 kind 全局计数（唯一权威）：
+    /// DEV-006 第一轮：静态生命周期修复 —— 在场状态改由 HubZoneTracker 按 kind 全局计数（唯一权威）：
     ///  - 多个 SellTerminal 时，离开其中一个不会错误清掉另一个仍在场的状态；
     ///  - 本实例 OnDisable/OnDestroy 主动归还计数，场景卸载/对象禁用后 PlayerInRange 不残留 true；
-    ///  - 按 E 出售只在【本实例】范围内有效（localCount &gt; 0），避免多终端同帧重复结算路径。
+    ///  - 按 E 出售只在【本实例】范围内有效（ZonePresence.Present），避免多终端同帧重复结算路径。
+    ///
+    /// DEV-006 第二轮：每实例计数收拢到 ZonePresence —— 正常 OnTriggerExit 逐 Collider 配对，
+    /// Disable/Destroy 走 ReleaseAll 一次性归还本实例全部占用（多 Collider 玩家也不残留全局计数）。
     ///
     /// 设计要点：
     ///  - 货舱数据唯一真相源仍是 InventoryGrid（经 DrillVehicle），本终端只做「结算」；
@@ -34,8 +36,8 @@ namespace Ashfall
         [Tooltip("出售时是否顺带恢复满燃料/维修（终端=整备台？默认否——补给走 FuelStation / SurfaceBase）")]
         public bool alsoRefuel = false;
 
-        /// <summary>本实例范围内玩家计数（0/1 边界才动全局计数）。</summary>
-        int localCount;
+        /// <summary>本实例在场计数（ZonePresence：逐 Collider 配对；禁用/销毁时 ReleaseAll 一次归还）。</summary>
+        readonly ZonePresence presence = new ZonePresence(HubZoneKind.Sell);
 
         void Awake()
         {
@@ -48,34 +50,25 @@ namespace Ashfall
             var p = GameManager.Instance != null ? GameManager.Instance.Player : null;
             if (p == null || p.IsDead) return;
 
-            if (localCount > 0 && Input.GetKeyDown(sellKey))
+            if (presence.Present && Input.GetKeyDown(sellKey))
                 TrySell(p);
         }
 
         void OnTriggerEnter2D(Collider2D other)
         {
             if (other.GetComponent<DrillVehicle>() == null) return;
-            if (localCount == 0) HubZoneTracker.Enter(HubZoneKind.Sell);
-            localCount++;
+            presence.Enter();
         }
 
         void OnTriggerExit2D(Collider2D other)
         {
             if (other.GetComponent<DrillVehicle>() == null) return;
-            ReleaseLocal();
+            presence.Exit();
         }
 
-        void OnDisable() => ReleaseLocal();
+        void OnDisable() => presence.ReleaseAll();
 
-        void OnDestroy() => ReleaseLocal();
-
-        /// <summary>归还本实例的在场计数（幂等；场景卸载/禁用/销毁后 PlayerInRange 不残留）。</summary>
-        void ReleaseLocal()
-        {
-            if (localCount <= 0) return;
-            localCount--;
-            if (localCount == 0) HubZoneTracker.Exit(HubZoneKind.Sell);
-        }
+        void OnDestroy() => presence.ReleaseAll();
 
         /// <summary>
         /// 出售全部矿物。返回本次收益；0 = 空舱 / 无效（不结算、不加钱）。

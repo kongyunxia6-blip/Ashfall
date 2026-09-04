@@ -14,6 +14,9 @@ namespace Ashfall
     /// 兼容旧测试场景：若场景里没有任何工作台（AnyExists=false），GameHUD 回退到
     /// 「地表任意位置可开商店」的原原型行为 —— 正式路径（本场景放置了工作台）不受影响。
     ///
+    /// DEV-006 第二轮：每实例计数收拢到 ZonePresence —— 正常 OnTriggerExit 逐 Collider 配对，
+    /// Disable/Destroy 走 ReleaseAll 一次性归还本实例全部占用（多 Collider 玩家也不残留全局计数）。
+    ///
     /// 挂在哪：地表工作台占位物上，需带 Collider2D（isTrigger 自动设置）。
     /// </summary>
     [RequireComponent(typeof(Collider2D))]
@@ -27,8 +30,8 @@ namespace Ashfall
 
         static int aliveCount;
 
-        /// <summary>本实例是否正有玩家在范围内（0/1 边界才动全局计数）。</summary>
-        int localCount;
+        /// <summary>本实例在场计数（ZonePresence：逐 Collider 配对；禁用/销毁时 ReleaseAll 一次归还）。</summary>
+        readonly ZonePresence presence = new ZonePresence(HubZoneKind.Workbench);
 
         void Awake()
         {
@@ -40,30 +43,21 @@ namespace Ashfall
         void OnTriggerEnter2D(Collider2D other)
         {
             if (other.GetComponent<DrillVehicle>() == null) return;
-            if (localCount == 0) HubZoneTracker.Enter(HubZoneKind.Workbench);
-            localCount++;
+            presence.Enter();
         }
 
         void OnTriggerExit2D(Collider2D other)
         {
             if (other.GetComponent<DrillVehicle>() == null) return;
-            ReleaseLocal();
+            presence.Exit();
         }
 
-        void OnDisable() => ReleaseLocal();
+        void OnDisable() => presence.ReleaseAll();
 
         void OnDestroy()
         {
-            ReleaseLocal();
+            presence.ReleaseAll();
             aliveCount = Mathf.Max(0, aliveCount - 1);
-        }
-
-        /// <summary>归还本实例的在场计数（OnDisable/OnDestroy/玩家离开共用；幂等）。</summary>
-        void ReleaseLocal()
-        {
-            if (localCount <= 0) return;
-            localCount--;
-            if (localCount == 0) HubZoneTracker.Exit(HubZoneKind.Workbench);
         }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]

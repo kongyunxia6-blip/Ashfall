@@ -170,7 +170,22 @@ namespace Ashfall.EditorTools
             // ---- 7. 地表功能区（x 间距 ≥8，互不重叠；触发区都在玩家活动带 y=1）----
             var hubGo = new GameObject("SurfaceHub_Zones");
 
-            // 7.1 登陆舱 / 返航安全区（x=6）：只做返航判定（IsAtSurface），自动服务关闭 → 补给走 FuelStation
+            // 7.0 地表据点大区 SurfaceHubZone：GameManager.IsAtSurface 的唯一权威来源。
+            //     覆盖整个 Hub 地表带（全宽 cell 0..47，y 世界 ∈ [-3.0, 0.0] = 网格地表带 y 0..2），
+            //     含下矿口入口上方 —— 玩家在地表带水平移动（Lander→Sell→Fuel→Workbench→洞口）恒为
+            //     IsAtSurface=true；真正向下挖穿地面（下到 y≥3，世界 y &lt; -3.0）才离开本区 → false。
+            //     中心取 cell(24,1) 的世界坐标，尺寸 48×3（cellSize=1 布局约定）。
+            var hubCenter = digGrid.GridToWorld(24, layout.surfaceY);
+            var hubZoneGo = new GameObject("SurfaceHubZone");
+            hubZoneGo.transform.SetParent(hubGo.transform);
+            hubZoneGo.transform.position = new Vector3(hubCenter.x, hubCenter.y, 0f);
+            var hubCol = hubZoneGo.AddComponent<BoxCollider2D>();
+            hubCol.size = new Vector2(48f, 3f);
+            hubCol.isTrigger = true;
+            hubZoneGo.AddComponent<SurfaceHubZone>();
+
+            // 7.1 登陆舱 / 返航安全区（x=6）：只做 Lander 上下文（IsAtSurface 已由 SurfaceHubZone 负责），
+            //     自动服务关闭 → 补给走 FuelStation
             var lander = NewZoneObject("Lander_LandingPad", hubGo.transform, digGrid, 6, layout.surfaceY, new Vector2(3f, 2f));
             var surfaceBase = lander.AddComponent<SurfaceBase>();
             surfaceBase.autoSellCargo = false;
