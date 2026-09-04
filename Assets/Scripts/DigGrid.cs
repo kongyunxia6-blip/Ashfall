@@ -39,6 +39,13 @@ namespace Ashfall
                  "本字段为空时旧场景逐字节零回归。")]
         public OreVeinGenerator oreVeinGenerator;
 
+        [Header("DEV-008 地下探索空间（可选）")]
+        [Tooltip("非空时：基础地层跳过逐格 caveChance 椒盐打洞（天然 Empty 全部由本生成器以连贯空间叠加），" +
+                 "且基础地层只铺纯填充物。生成顺序 = Base Strata → Space Pass → Ore Vein Pass" +
+                 "（space pass 先挖空连贯空间，矿脉再基于剩余实心地层找墙体落点）。" +
+                 "为空 = 维持旧行为（含逐格 caveChance）。注：启用后若需要矿，请同时挂 OreVeinGenerator。")]
+        public UndergroundSpaceGenerator undergroundSpaceGenerator;
+
         TileDefinition[,] grid;
         Tile solidTile;
         Grid layoutGrid;
@@ -134,6 +141,8 @@ namespace Ashfall
 
             // DEV-007：启用矿脉生成时，基础地层只铺纯填充物（矿物全部交给 ore pass 叠加）
             bool veinMode = oreVeinGenerator != null && oreVeinGenerator.isActiveAndEnabled;
+            // DEV-008：启用探索空间时，禁用逐格 caveChance 椒盐打洞，天然 Empty 全部由 space pass 连贯生成
+            bool spaceMode = undergroundSpaceGenerator != null && undergroundSpaceGenerator.isActiveAndEnabled;
 
             for (int y = 0; y < depth; y++)
             {
@@ -155,15 +164,17 @@ namespace Ashfall
                         continue;
                     }
 
-                    // 天然空洞
-                    if (layer != null && UnityEngine.Random.value < layer.caveChance)
+                    // 天然空洞（仅非 space 模式；space 模式的 Empty 由 SpacePass 连贯生成，避免椒盐噪点）
+                    if (!spaceMode && layer != null && UnityEngine.Random.value < layer.caveChance)
                     {
                         grid[x, y] = database.emptyTile;
                         continue;
                     }
 
-                    // 基础地层：矿脉模式只产填充物，否则维持旧版含散点矿的随机
-                    grid[x, y] = veinMode ? database.PickStrata(layer) : database.PickRandom(layer);
+                    // 基础地层：矿脉/空间模式只产填充物，否则维持旧版含散点矿的随机
+                    grid[x, y] = (veinMode || spaceMode)
+                        ? database.PickStrata(layer)
+                        : database.PickRandom(layer);
                 }
             }
 
@@ -176,6 +187,10 @@ namespace Ashfall
                     maxDurability[x, y] = max;
                     curDurability[x, y] = max;
                 }
+
+            // DEV-008：探索空间 pass（在矿脉 pass 之前 —— 先挖空连贯空间，矿脉再找墙体落点）
+            if (spaceMode)
+                undergroundSpaceGenerator.ApplyToGrid(this);
 
             // DEV-007：基础地层完成后执行矿脉 pass（可选；在耐久初始化后、整图刷新前）
             if (veinMode)

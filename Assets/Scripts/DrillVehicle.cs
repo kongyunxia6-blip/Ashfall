@@ -547,6 +547,16 @@ namespace Ashfall
 
         Vector2 ReadInput()
         {
+            // DEV-008 真帧实测：测试驱动激活期间以驱动方向为移动输入（DebugDriveFor/Input 同源），
+            // 位移经下方真实物理分支执行（FixedUpdate）；未激活时走硬件按键，手玩行为完全不变。
+            var mfc = miningFeel;
+            if (mfc != null && mfc.DebugActive)
+            {
+                Vector2 dd = mfc.DebugMove;
+                if (dd.sqrMagnitude > 0f)
+                    return dd.sqrMagnitude > 1f ? dd.normalized : dd;
+            }
+
             // 直接读按键：不依赖 InputManager.asset 里的 Horizontal/Vertical 轴向配置，
             // 新建工程即使没生成输入配置也能立刻操作。
             float h = 0f, v = 0f;
