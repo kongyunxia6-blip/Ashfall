@@ -79,13 +79,17 @@ namespace Ashfall
         /// <summary>是否正在采矿（按住输入且有有效目标）。</summary>
         public bool IsMining { get; private set; }
 
-        /// <summary>实际生效的工具效率倍率（含升级系统）。</summary>
+        /// <summary>实际生效的工具效率倍率（含升级/装备系统；永远只 Hit 单格）。</summary>
         public float EffectiveMultiplier
         {
             get
             {
                 float m = miningSpeedMultiplier;
-                if (useUpgradeDrillSpeed && upgrades != null) m *= upgrades.DrillSpeedMultiplier;
+                // DEV-010：装备成长存在时以其挖速倍率为准；否则沿用旧 UpgradeSystem.DrillSpeedMultiplier。
+                if (equipment != null)
+                    m *= equipment.EffectiveDigSpeedMultiplier;
+                else if (useUpgradeDrillSpeed && upgrades != null)
+                    m *= upgrades.DrillSpeedMultiplier;
                 return Mathf.Max(0.1f, m);
             }
         }
@@ -104,6 +108,8 @@ namespace Ashfall
         DrillVehicle vehicle;
         Rigidbody2D rb;
         UpgradeSystem upgrades;
+        /// <summary>DEV-010：装备成长权威组件（可空 → 空则沿用旧 UpgradeSystem 钻速倍率）。</summary>
+        EquipmentProgression equipment;
 
         Vector2Int currentDir = Vector2Int.zero;   // 锁定的 4 方向
         Vector2Int? lockedCell;                    // 迟滞锁定格（部分挖掘过的格不随便换）
@@ -133,7 +139,9 @@ namespace Ashfall
         {
             if (grid == null && vehicle != null) grid = vehicle.grid;
             if (grid == null) grid = FindFirstObjectByType<DigGrid>();
-            upgrades = GameManager.Instance != null ? GameManager.Instance.Upgrades : null;
+            var gm = GameManager.Instance;
+            upgrades = gm != null ? gm.Upgrades : null;
+            equipment = gm != null ? gm.Equipment : null;
             if (vehicle == null)
                 Debug.LogWarning("[DEV-003] MiningFeelController 需要与 DrillVehicle 同物体挂载");
         }

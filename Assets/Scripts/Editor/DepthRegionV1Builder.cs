@@ -7,26 +7,27 @@ using UnityEngine.Tilemaps;
 namespace Ashfall.EditorTools
 {
     /// <summary>
-    /// 一键搭建 DEV-009 深度 / 区域推进验收场景。
-    /// 用法：菜单栏 → 灰烬之下 → 搭建 DEV-009 深度/区域推进测试场景
+    /// 一键搭建深度 / 区域推进 + DEV-010 装备成长测试场景。
+    /// 用法：菜单栏 → 灰烬之下 → 搭建 DEV-009 / DEV-010 测试场景
     ///
-    /// 基线：DEV-008 地下探索空间 V1（c3f175c）。
-    /// 场景结构（与 DEV-008 验收场景同款，仅新增「区域语义层」）：
+    /// 基线：DEV-008 地下探索空间 V1（c3f175c）+ DEV-009 区域推进（550fca6）。
+    /// 共用 BuildCore（useEquipment 开关）：
+    ///  - useEquipment=false → 原 DEV-009 场景（UpgradeSystem 装备源，零回归）；
+    ///  - useEquipment=true  → DEV-010 场景（EquipmentProgression 四条线+模块，属性源切换）。
+    /// 其余结构完全一致：
     ///  - DigGrid 56x72、seed 固定、enableFallingRocks=false、breakDuration=0；
     ///  - Base Strata → Space Pass → Ore Vein Pass 顺序不变（spaceMode）；
     ///  - UndergroundSpaceGenerator + OreVeinGenerator 的带边界【全部取自 DepthRegionLayout】
-    ///    （唯一来源：Shallow 3..21 / Mid 22..43 / Deep 44..62；空间带 Shallow 从 spaceStartY=5 起），
-    ///    本 Builder 不再出现任何裸边界数字；
+    ///    （唯一来源：Shallow 3..21 / Mid 22..43 / Deep 44..62；空间带 Shallow 从 spaceStartY=5 起）；
     ///  - DepthRegionProgression 挂在 GameManager 上（只读区域状态 + 首次进入事件/提示）；
     ///  - GameHUD.regionProgression 指向它 → 左上显示「深度 x m | 区域：xx」，并画首次进入横幅；
     ///  - 保留区/功能区/中心坑口同 DEV-008；
-    ///  - 地表带布局由 DepthRegionV1TestLayout 重放（复用 UndergroundSpaceV1TestLayout 实现）。
+    ///  - 地表带布局由 Layout 组件重放（复用 UndergroundSpaceV1TestLayout 实现）。
     ///
     /// 不破坏 DEV-006/007/008 原测试场景。
     /// </summary>
     public static class DepthRegionV1Builder
     {
-        const string ScenePath = "Assets/Scenes/DepthRegionV1Test.unity";
         const string SceneFolder = "Assets/Scenes";
         const string DataFolder = "Assets/Ashfall/Data";
 
@@ -38,7 +39,17 @@ namespace Ashfall.EditorTools
         public const int AcceptanceSeed = 20260908;
 
         [MenuItem("灰烬之下/搭建 DEV-009 深度/区域推进测试场景")]
-        public static void Build()
+        public static void Build() => BuildCore("Assets/Scenes/DepthRegionV1Test.unity", false, "DEV-009");
+
+        [MenuItem("灰烬之下/搭建 DEV-010 装备成长+模块系统测试场景")]
+        public static void BuildEquipmentProgressionV1()
+            => BuildCore("Assets/Scenes/EquipmentProgressionV1Test.unity", true, "DEV-010");
+
+        /// <summary>
+        /// 共用搭建核心。useEquipment = true → 挂 EquipmentProgression（四条线+模块，属性源切换）；
+        /// false → 挂旧 UpgradeSystem（原 DEV-009 行为，零回归）。布局/seed/区域带完全一致。
+        /// </summary>
+        public static void BuildCore(string scenePath, bool useEquipment, string tag)
         {
             var db = AssetDatabase.LoadAssetAtPath<TileDatabase>($"{DataFolder}/TileDatabase.asset");
             var iron = AssetDatabase.LoadAssetAtPath<TileDefinition>($"{DataFolder}/Iron_铁矿.asset");
@@ -48,7 +59,7 @@ namespace Ashfall.EditorTools
             var dirt = AssetDatabase.LoadAssetAtPath<TileDefinition>($"{DataFolder}/Dirt_泥土.asset");
             if (db == null || iron == null || copper == null || tin == null || silver == null || dirt == null)
             {
-                Debug.LogError("[DEV-009] 必要资产缺失（Iron/Copper/Tin/Silver/Dirt/DB）。请先运行 Tools/Ashfall/一键生成默认方块与数据库");
+                Debug.LogError($"[{tag}] 必要资产缺失（Iron/Copper/Tin/Silver/Dirt/DB）。请先运行 Tools/Ashfall/一键生成默认方块与数据库");
                 return;
             }
 
@@ -233,7 +244,10 @@ namespace Ashfall.EditorTools
 
             // ---- 6. 总控 + HUD + 背包 + 表现 + 【DEV-009 区域推进】----
             var gmGo = new GameObject("GameManager");
-            gmGo.AddComponent<UpgradeSystem>().costMultiplier = 0.4f;
+            if (useEquipment)
+                gmGo.AddComponent<EquipmentProgression>();   // DEV-010：装备成长权威（属性源切换点）
+            else
+                gmGo.AddComponent<UpgradeSystem>().costMultiplier = 0.4f;
             gmGo.AddComponent<InventoryPanel>();
 
             // DEV-009：区域推进（只读状态；同一物体上供 GameHUD GetComponent 兜底）
@@ -308,18 +322,18 @@ namespace Ashfall.EditorTools
             follow.maxOrthoSize = 16f;
 
             // ---- 9. 保存 + Build Settings ----
-            EditorSceneManager.SaveScene(scene, ScenePath);
+            EditorSceneManager.SaveScene(scene, scenePath);
 
             var scenes = EditorBuildSettings.scenes;
             bool exists = false;
             foreach (var s in scenes)
-                if (s.path == ScenePath) { exists = true; s.enabled = true; }
+                if (s.path == scenePath) { exists = true; s.enabled = true; }
 
             if (!exists)
             {
                 var list = new System.Collections.Generic.List<EditorBuildSettingsScene>(scenes)
                 {
-                    new EditorBuildSettingsScene(ScenePath, true)
+                    new EditorBuildSettingsScene(scenePath, true)
                 };
                 EditorBuildSettings.scenes = list.ToArray();
             }
@@ -333,7 +347,7 @@ namespace Ashfall.EditorTools
 
             Selection.activeGameObject = playerGo;
 
-            Debug.Log($"[DEV-009] 深度/区域推进测试场景已搭建：{ScenePath}\n" +
+            Debug.Log($"[{tag}] {(useEquipment ? "装备成长+模块" : "深度/区域")}测试场景已搭建：{scenePath}\n" +
                       $"seed={digGrid.seed}，网格 {GridWidth}x{GridDepth}，" +
                       $"Region: Surface(y0..{DepthRegionLayout.Surface.maxDepth}) / " +
                       $"Shallow({DepthRegionLayout.Shallow.minDepth}..{DepthRegionLayout.Shallow.maxDepth}) / " +
@@ -341,7 +355,8 @@ namespace Ashfall.EditorTools
                       $"Deep({DepthRegionLayout.Deep.minDepth}..{DepthRegionLayout.Deep.maxDepth})；" +
                       $"spaces={spaceGen.Spaces.Count} empty={spaceGen.TotalEmptyCells}，" +
                       $"veins={oreGen.Veins.Count} planted={oreGen.TotalCellsPlanted}。" +
-                      $"功能区 x=6/14/22/30；坑口 x={GridWidth / 2}±3。");
+                      $"功能区 x=6/14/22/30；坑口 x={GridWidth / 2}±3。" +
+                      (useEquipment ? " 装备源 = EquipmentProgression" : " 装备源 = UpgradeSystem"));
         }
 
         // ---------- 工具 ----------

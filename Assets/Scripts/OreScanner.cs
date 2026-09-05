@@ -108,6 +108,19 @@ namespace Ashfall
         [Tooltip("扫描半径（Chebyshev 距离；3~5 格即可，V1 有限范围不透视全图）")]
         [Min(1)] public int scanRadius = 4;
 
+        [Header("DEV-010：外部半径加成（勘探传感器装备时由 EquipmentProgression 实时提供）")]
+        [Tooltip("实际生效半径 = scanRadius + 外部加成。Scanner 本身仍只读。")]
+        public int EffectiveRadius
+        {
+            get
+            {
+                var gm = GameManager.Instance;
+                var eq = gm != null ? gm.Equipment : null;
+                int bonus = eq != null ? eq.EffectiveScannerRadiusBonus : 0;
+                return scanRadius + bonus;
+            }
+        }
+
         [Tooltip("触发扫描的按键")]
         public KeyCode scanKey = KeyCode.R;
 
@@ -146,10 +159,10 @@ namespace Ashfall
             Debug.Log("[OreScanner] " + result.Summary);
         }
 
-        /// <summary>以世界坐标为中心扫描（转网格坐标后调 ScanAt）。</summary>
+        /// <summary>以世界坐标为中心扫描（转网格坐标后调 ScanAt）。半径 = 基础 + 外部加成（只读）。</summary>
         public OreScanResult ScanAround(Vector3 worldPos)
         {
-            return ScanAt(grid.WorldToGrid(worldPos), scanRadius);
+            return ScanAt(grid.WorldToGrid(worldPos), EffectiveRadius);
         }
 
         /// <summary>

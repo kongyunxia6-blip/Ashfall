@@ -37,6 +37,7 @@ namespace Ashfall
         public int Cash { get; private set; }
         public int MaxDepthReached { get; set; }
         public UpgradeSystem Upgrades { get; private set; }
+        public EquipmentProgression Equipment { get; private set; }   // DEV-010：装备成长权威（可空 → 旧场景走 UpgradeSystem）
         public DrillVehicle Player { get; set; }
         public bool IsAtSurface { get; set; }
         public string LastServiceMessage { get; set; } = "";
@@ -45,10 +46,11 @@ namespace Ashfall
         {
             Instance = this;
             Upgrades = GetComponent<UpgradeSystem>();
+            Equipment = GetComponent<EquipmentProgression>();
             Cash = startingCash;
 
-            if (Upgrades == null)
-                Debug.LogWarning("[GameManager] 同一物体上未找到 UpgradeSystem，升级功能将不可用。");
+            if (Upgrades == null && Equipment == null)
+                Debug.LogWarning("[GameManager] 同一物体上未找到 UpgradeSystem / EquipmentProgression，升级功能将不可用。");
         }
 
         public void AddCash(int amount) => Cash += amount;

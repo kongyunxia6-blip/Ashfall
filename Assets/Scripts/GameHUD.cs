@@ -49,7 +49,23 @@ namespace Ashfall
             }
 
             if (!shopOpen) return;
-            if (gm == null || gm.Upgrades == null) return;
+            if (gm == null) return;
+
+            // DEV-010：装备成长模式（1~4 升级四条线，5~8 toggle 模块）；否则旧 UpgradeSystem 面板（1~6）。
+            var eq = gm.Equipment;
+            if (eq != null)
+            {
+                if (Input.GetKeyDown(KeyCode.Alpha1)) TryUpgradeLine(eq, EquipmentLine.Drill);
+                if (Input.GetKeyDown(KeyCode.Alpha2)) TryUpgradeLine(eq, EquipmentLine.FuelTank);
+                if (Input.GetKeyDown(KeyCode.Alpha3)) TryUpgradeLine(eq, EquipmentLine.CargoHold);
+                if (Input.GetKeyDown(KeyCode.Alpha4)) TryUpgradeLine(eq, EquipmentLine.Mobility);
+                if (Input.GetKeyDown(KeyCode.Alpha5)) TryToggleModule(eq, EquipmentModule.EfficientMotor);
+                if (Input.GetKeyDown(KeyCode.Alpha6)) TryToggleModule(eq, EquipmentModule.ReinforcedCargoRack);
+                if (Input.GetKeyDown(KeyCode.Alpha7)) TryToggleModule(eq, EquipmentModule.DrillCooling);
+                if (Input.GetKeyDown(KeyCode.Alpha8)) TryToggleModule(eq, EquipmentModule.SurveySensor);
+                return;
+            }
+            if (gm.Upgrades == null) return;
 
             if (Input.GetKeyDown(KeyCode.Alpha1)) TryBuy(UpgradePart.Drill);
             if (Input.GetKeyDown(KeyCode.Alpha2)) TryBuy(UpgradePart.Hull);
@@ -57,6 +73,22 @@ namespace Ashfall
             if (Input.GetKeyDown(KeyCode.Alpha4)) TryBuy(UpgradePart.FuelTank);
             if (Input.GetKeyDown(KeyCode.Alpha5)) TryBuy(UpgradePart.Radiator);
             if (Input.GetKeyDown(KeyCode.Alpha6)) TryBuy(UpgradePart.CargoBay);
+        }
+
+        void TryUpgradeLine(EquipmentProgression eq, EquipmentLine line)
+        {
+            var gm = GameManager.Instance;
+            if (gm == null) return;
+            var r = eq.TryUpgrade(line);
+            gm.LastServiceMessage = r.reason;
+        }
+
+        void TryToggleModule(EquipmentProgression eq, EquipmentModule m)
+        {
+            var gm = GameManager.Instance;
+            if (gm == null) return;
+            var r = eq.TryToggleModule(m);
+            gm.LastServiceMessage = r.reason;
         }
 
         void TryBuy(UpgradePart part)
@@ -244,7 +276,11 @@ namespace Ashfall
                 GUILayout.Label("朝方块按住方向键：钻探", labelStyle);
             }
 
-            if (shopOpen && gm.Upgrades != null)
+            if (shopOpen && gm.Equipment != null)
+            {
+                DrawEquipmentPanel(gm.Equipment, gm.Cash);
+            }
+            else if (shopOpen && gm.Upgrades != null)
             {
                 GUILayout.Space(12);
                 GUILayout.Label("── 升级商店（按 1~6 购买）──", labelStyle);
@@ -263,6 +299,67 @@ namespace Ashfall
             }
 
             GUILayout.EndArea();
+        }
+
+        /// <summary>DEV-010：装备成长 + 模块商店（四条线 1~4 / 模块 5~8 toggle）。</summary>
+        void DrawEquipmentPanel(EquipmentProgression eq, int cash)
+        {
+            GUILayout.Space(12);
+            GUILayout.Label($"── 装备工作台（升级 1~4 · 模块 5~8）──", labelStyle);
+            GUILayout.Label($"模块槽 {eq.EquippedCount}/{eq.SlotCount}  ·  现金 ${cash}", labelStyle);
+
+            DrawLineRow(1, EquipmentLine.Drill, eq, cash);
+            DrawLineRow(2, EquipmentLine.FuelTank, eq, cash);
+            DrawLineRow(3, EquipmentLine.CargoHold, eq, cash);
+            DrawLineRow(4, EquipmentLine.Mobility, eq, cash);
+
+            GUILayout.Space(6);
+            GUILayout.Label("── 模块（键 = 购买/装卸 切换）──", labelStyle);
+            DrawModuleRow(5, EquipmentModule.EfficientMotor, eq, cash);
+            DrawModuleRow(6, EquipmentModule.ReinforcedCargoRack, eq, cash);
+            DrawModuleRow(7, EquipmentModule.DrillCooling, eq, cash);
+            DrawModuleRow(8, EquipmentModule.SurveySensor, eq, cash);
+        }
+
+        void DrawLineRow(int hotkey, EquipmentLine line, EquipmentProgression eq, int cash)
+        {
+            int lv = eq.GetLevel(line);
+            if (lv >= EquipmentCatalog.MaxLevel)
+            {
+                GUI.color = new Color(0.55f, 0.55f, 0.55f);
+                GUILayout.Label($"[{hotkey}] {EquipmentCatalog.LineDisplayName(line)}  Lv{lv}  已满级  ·  {EquipmentCatalog.LineEffectText(line, lv)}", labelStyle);
+                GUI.color = Color.white;
+                return;
+            }
+
+            int cost = eq.NextLevelCost(line);
+            bool afford = cash >= cost;
+            GUI.color = afford ? Color.white : new Color(1f, 0.45f, 0.45f);
+            GUILayout.Label($"[{hotkey}] {EquipmentCatalog.LineDisplayName(line)}  Lv{lv}→{lv + 1}  ${cost}  ·  {EquipmentCatalog.LineEffectText(line, lv + 1)}", labelStyle);
+            GUI.color = Color.white;
+        }
+
+        void DrawModuleRow(int hotkey, EquipmentModule m, EquipmentProgression eq, int cash)
+        {
+            string name = EquipmentCatalog.ModuleDisplayName(m);
+            if (eq.IsEquipped(m))
+            {
+                GUI.color = new Color(0.45f, 0.9f, 0.55f);
+                GUILayout.Label($"[{hotkey}] {name}  ● 已装备（再按=卸下）", labelStyle);
+            }
+            else if (eq.IsOwned(m))
+            {
+                GUI.color = new Color(0.9f, 0.9f, 0.4f);
+                GUILayout.Label($"[{hotkey}] {name}  已拥有 · 未装备（按=装备）", labelStyle);
+            }
+            else
+            {
+                int cost = EquipmentCatalog.ModuleCost(m);
+                bool afford = cash >= cost;
+                GUI.color = afford ? Color.white : new Color(1f, 0.45f, 0.45f);
+                GUILayout.Label($"[{hotkey}] {name}  购买 ${cost}", labelStyle);
+            }
+            GUI.color = Color.white;
         }
 
         void DrawShopRow(int hotkey, UpgradePart part, UpgradeSystem up, int cash)
