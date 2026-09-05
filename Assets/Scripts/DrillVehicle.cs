@@ -164,6 +164,11 @@ namespace Ashfall
 
         Rigidbody2D rb;
         UpgradeSystem upgrades;
+        /// <summary>
+        /// DEV-010：装备成长 + 模块系统的权威组件（可空 → 空 = 旧场景，走 upgrades 数值）。
+        /// 与 upgrades 互斥二选一：存在 equipment 时 ApplyUpgradeStats 走 EP Effective 属性。
+        /// </summary>
+        EquipmentProgression equipment;
         MovementMode currentMode;
 
         /// <summary>
@@ -203,7 +208,9 @@ namespace Ashfall
 
         void Start()
         {
-            upgrades = GameManager.Instance != null ? GameManager.Instance.Upgrades : null;
+            var gm = GameManager.Instance;
+            upgrades = gm != null ? gm.Upgrades : null;
+            equipment = gm != null ? gm.Equipment : null;
             ApplyUpgradeStats();
             FullRestore();
 
@@ -343,7 +350,8 @@ namespace Ashfall
             if (IsDead) { rb.linearVelocity = Vector2.zero; return; }
 
             Vector2 input = ReadInput();
-            float speed = upgrades != null ? upgrades.MoveSpeed : baseMoveSpeed;
+            float speed = equipment != null ? equipment.EffectiveMoveSpeed
+                : (upgrades != null ? upgrades.MoveSpeed : baseMoveSpeed);
 
             // 四种物理行为分流：
             //   Hover          = 直驱悬浮（原型手感，Game.unity 用，保持原样）
@@ -627,6 +635,8 @@ namespace Ashfall
                 return DigHitResult.NotSolid;
 
             int drillLevel = upgrades != null ? upgrades.DrillLevel : 1;
+            // DEV-010：装备成长模式没有额外硬度门槛语义（各 tile 仍按原 hardness 判定，
+            // 测试场景 tile hardness=1 → Lv 恒通过）。永不改变「一次命中 1 Block」规则。
             if (tdef.hardness > drillLevel)
             {
                 ResetDig();
@@ -723,7 +733,9 @@ namespace Ashfall
 
             if (input.sqrMagnitude > 0.01f)
             {
-                drain = fuelMoveDrain;
+                // DEV-010：节能电机只降低移动/悬停耗油（fuelMoveDrain 基准），挖掘附加耗油不变。
+                float moveMult = equipment != null ? equipment.EffectiveMoveFuelMultiplier : 1f;
+                drain = fuelMoveDrain * moveMult;
                 // 向上对抗重力更费油；背得越重，爬升烧得越快
                 if (input.y > 0.1f) drain *= upwardFuelMultiplier * (1f + LoadRatio * weightFuelPenalty);
                 if (isDigging) drain += fuelDrillDrain;
@@ -782,6 +794,23 @@ namespace Ashfall
 
         public void ApplyUpgradeStats()
         {
+            // DEV-010：存在 EquipmentProgression → 装备成长作为属性源（Base+Level+Module 单一来源），
+            // 旧 UpgradeSystem 场景（无本组件）完全不受影响。
+            if (equipment != null)
+            {
+                MaxFuel = equipment.EffectiveMaxFuel;            // 只提上限；补满走 FuelStation
+                MaxHull = 100f;                                  // V1 无船体成长线 → 出厂 100
+                CargoCapacity = InventoryGrid.Columns * equipment.EffectiveCargoRows;
+                MaxCarryWeight = equipment.EffectiveMaxCarryWeight;
+
+                inventory.Resize(equipment.EffectiveCargoRows, MaxCarryWeight);
+                SyncCargoStats();
+
+                Fuel = Mathf.Min(Fuel, MaxFuel);
+                Hull = Mathf.Min(Hull, MaxHull);
+                return;
+            }
+
             if (upgrades == null)
             {
                 MaxFuel = 100f; MaxHull = 100f;

@@ -41,6 +41,9 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Scenes/DepthRegionV1Test.unity
     guid: b1abbb41c85a4c7479f7763d50d4a81d
+  - enabled: 1
+    path: Assets/Scenes/EquipmentProgressionV1Test.unity
+    guid: eed5df72e1566024988a34d83a67484c
   m_configObjects:
     com.unity.dt.app-ui: {fileID: 11400000, guid: 1b1c20d82303e4b5781c3ef50ac1449f, type: 2}
   m_UseUCBPForAssetBundles: 0
