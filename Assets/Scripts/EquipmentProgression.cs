@@ -263,15 +263,18 @@ namespace Ashfall
         }
 
         /// <summary>
-        /// Workbench 访问门控：场景有 Workbench → 必须 PlayerInRange；
-        /// 场景无 Workbench（旧原型风格）→ 回退地表任意位置可操作。
-        /// 与 GameHUD 开商店逻辑一致。
+        /// Workbench 访问门控（DEV-010 规则）：升级/购买/装卸只能在 Workbench 范围操作。
+        /// 场景必须存在 Workbench 且玩家在其 PlayerInRange 内才放行；
+        /// 无 Workbench 的场景一律拒绝（不再回退地表任意位置）。
+        /// 说明：GameHUD 面板可见性 (canShop) 保持宽松仅为兼容旧 UpgradeSystem 场景，
+        /// 一切状态修改都经本门控在数据层拒绝。
         /// </summary>
         public static bool CanAccessWorkbench()
         {
             var gm = GameManager.Instance;
             if (gm == null || !gm.IsAtSurface) return false;
-            return UpgradeWorkbench.AnyExists ? UpgradeWorkbench.PlayerInRange : true;
+            if (!UpgradeWorkbench.AnyExists) return false;
+            return UpgradeWorkbench.PlayerInRange;
         }
 
         // ---------- 状态重置（验收/新 Run 用） ----------
