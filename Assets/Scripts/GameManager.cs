@@ -38,6 +38,7 @@ namespace Ashfall
         public int MaxDepthReached { get; set; }
         public UpgradeSystem Upgrades { get; private set; }
         public EquipmentProgression Equipment { get; private set; }   // DEV-010：装备成长权威（可空 → 旧场景走 UpgradeSystem）
+        public RunRiskState RunRisk { get; private set; }             // DEV-011：风险撤离/Run 生命周期权威（可空 → 旧场景走 M1 死亡结算）
         public DrillVehicle Player { get; set; }
         public bool IsAtSurface { get; set; }
         public string LastServiceMessage { get; set; } = "";
@@ -47,6 +48,7 @@ namespace Ashfall
             Instance = this;
             Upgrades = GetComponent<UpgradeSystem>();
             Equipment = GetComponent<EquipmentProgression>();
+            RunRisk = GetComponent<RunRiskState>();
             Cash = startingCash;
 
             if (Upgrades == null && Equipment == null)
@@ -64,31 +66,49 @@ namespace Ashfall
         }
 
         /// <summary>
-        /// 死亡结算。三层轻惩罚：① 载荷全部损失 ② 现金扣打捞费 ③ 重生只恢复部分能源/服体（见 DrillVehicle）。
-        /// 【堵住的漏洞】原来死亡只清货舱、不扣现金且满状态重生，于是最优解是
+        /// 死亡结算（统一入口，DrillVehicle.Die 只调用一次；幂等由 RunRiskState guard 保证）。
+        ///  - RunRiskState 存在（DEV-011 场景）：Cargo 按规则部分保留（每 def floor(count×keep)）、
+        ///    扣 Recovery Fee（Cash 最多扣到 0）、生成 Failure Summary —— 一切由 RunRisk 权威结算；
+        ///  - 否则（旧场景，零回归）：M1 旧三层轻惩罚（载荷全清 + 旧打捞费 + 部分恢复重生）。
+        /// respawn 由本方法统一 Invoke；Respawn 时按是否有 RunRisk 决定是否再清空货舱
+        /// （有 RunRisk → 保留结算后存货，供玩家回地表 Sell；无 → 旧全清行为）。
+        /// 【堵住的漏洞】旧版死亡只清货舱、不扣现金且满状态重生，于是最优解是
         /// 回程时主动把燃料烧光 = 免费传送回地表。现在主动自杀要多付打捞费 + 补油 + 等 3 分钟。
         /// </summary>
         public void OnPlayerDied(string reason, int deathDepth)
         {
-            int cargoLost = Player != null ? Player.CargoValue : 0;
+            string msg;
+            if (RunRisk != null)
+            {
+                RunRisk.ResolveFailure(reason, deathDepth);
+                msg = RunRisk.LastFailureSummary;
+                Debug.Log($"[GameManager] 任务失败：{reason} → RunRiskState 已结算（Cargo 部分保留 + Recovery Fee），" +
+                          $"{respawnDelay} 秒后于地表重生；摘要：{msg}");
+            }
+            else
+            {
+                int cargoLost = Player != null ? Player.CargoValue : 0;
+                int fee = Mathf.Min(
+                    Mathf.RoundToInt(Cash * salvageFeeCashRatio),
+                    Mathf.RoundToInt(salvageFeeBase + deathDepth * salvageFeePerDepth));
+                SpendCash(fee);
+                msg = $"服体失效 · 深度 {deathDepth} · 损失载荷 ¥{cargoLost} · 打捞费 ¥{fee}";
+                Debug.Log($"[GameManager] 任务失败：{reason} → 深度 {deathDepth}，损失载荷 ¥{cargoLost}，" +
+                          $"打捞费 ¥{fee}，{respawnDelay} 秒后于地表重生");
+            }
 
-            int fee = Mathf.Min(
-                Mathf.RoundToInt(Cash * salvageFeeCashRatio),
-                Mathf.RoundToInt(salvageFeeBase + deathDepth * salvageFeePerDepth));
-            SpendCash(fee);
-
-            LastServiceMessage = $"服体失效 · 深度 {deathDepth} · 损失载荷 ¥{cargoLost} · 打捞费 ¥{fee}";
-
-            Debug.Log($"[GameManager] 任务失败：{reason} → 深度 {deathDepth}，损失载荷 ¥{cargoLost}，" +
-                      $"打捞费 ¥{fee}，{respawnDelay} 秒后于地表重生");
-
+            LastServiceMessage = msg;
             Invoke(nameof(Respawn), respawnDelay);
         }
 
         void Respawn()
         {
             if (Player == null) return;
-            Player.RespawnAtSurface(spawnPoint);
+            // DEV-011：有 RunRisk 时货舱损失已在 ResolveFailure 按规则执行，重生保留存活货物（回地表可 Sell）；
+            // 旧场景（无 RunRisk）维持 M1 全清行为。
+            bool keepCargo = RunRisk != null;
+            Player.RespawnAtSurface(spawnPoint, clearCargo: !keepCargo);
+            if (RunRisk != null) RunRisk.OnRespawned();
         }
     }
 }

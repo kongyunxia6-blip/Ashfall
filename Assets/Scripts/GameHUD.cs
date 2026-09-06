@@ -25,11 +25,28 @@ namespace Ashfall
         GUIStyle centerStyle;
         GUIStyle panelStyle;
 
+        // DEV-011：失败摘要显示计时（respawn 后出现，显示 6 秒或直到下一次 Run/操作覆盖）
+        string failureSummarySeen = "";
+        float failureSummaryUntil;
+
         // ---------- 输入 ----------
 
         void Update()
         {
             var gm = GameManager.Instance;
+
+            // DEV-011：跟踪失败摘要变化 → 每次新失败重新起 6 秒显示窗口（同一失败只显示一次）
+            var risk = gm != null ? gm.RunRisk : null;
+            if (risk != null)
+            {
+                string s = risk.LastFailureSummary;
+                if (s != failureSummarySeen)
+                {
+                    failureSummarySeen = s;
+                    if (!string.IsNullOrEmpty(s)) failureSummaryUntil = Time.time + 6f;
+                }
+            }
+
             bool canShop = gm != null && gm.IsAtSurface
                 && (UpgradeWorkbench.PlayerInRange || !UpgradeWorkbench.AnyExists);
 
@@ -147,7 +164,7 @@ namespace Ashfall
             var p = gm != null ? gm.Player : null;
 
             // 左上：经济与深度
-            GUILayout.BeginArea(new Rect(12, 12, 300, 120));
+            GUILayout.BeginArea(new Rect(12, 12, 320, 165));
             GUILayout.Label($"现金   ${(gm != null ? gm.Cash : 0)}", labelStyle);
             var prog = regionProgression != null ? regionProgression
                 : (gm != null ? gm.GetComponent<DepthRegionProgression>() : null);
@@ -163,6 +180,17 @@ namespace Ashfall
                 // 旧场景回退（无 DepthRegionProgression）
                 GUILayout.Label($"当前深度   {(p != null ? p.CurrentDepth : 0)} m", labelStyle);
                 GUILayout.Label($"最深纪录   {(gm != null ? gm.MaxDepthReached : 0)} m", labelStyle);
+            }
+
+            // DEV-011：未结算风险行（Run 进行中或携货在地表未卖时显示；Sell 后 / 未开 Run 隐藏）
+            var risk = gm != null ? gm.RunRisk : null;
+            if (risk != null && p != null
+                && (risk.RunActive || p.CargoValue > 0) && !risk.RunSecured)
+            {
+                GUI.color = new Color(1f, 0.72f, 0.35f);
+                GUILayout.Label($"未结算 ${p.CargoValue} · 失事保留约 {RiskExtractionCatalog.KeepRatioText}" +
+                                $" · 打捞费约 ${risk.EstimatedRecoveryFee}", labelStyle);
+                GUI.color = Color.white;
             }
             GUILayout.EndArea();
 
@@ -206,6 +234,15 @@ namespace Ashfall
 
             if (!string.IsNullOrEmpty(msg))
                 GUI.Label(new Rect(0, Screen.height - 128f, Screen.width, 30f), msg, centerStyle);
+
+            // DEV-011：失败摘要（打捞完成 · 损失货物明细 · 打捞费 · 保留价值）。每次新失败显示 6 秒
+            var risk2 = gm != null ? gm.RunRisk : null;
+            if (risk2 != null && failureSummaryUntil > Time.time
+                && !string.IsNullOrEmpty(risk2.LastFailureSummary))
+            {
+                GUI.Label(new Rect(0, Screen.height - 162f, Screen.width, 30f),
+                    risk2.LastFailureSummary, centerStyle);
+            }
 
             // 死亡提示
             if (p != null && p.IsDead)
@@ -267,6 +304,17 @@ namespace Ashfall
                 GUI.color = new Color(0.7f, 0.7f, 0.7f);
                 GUILayout.Label("【地下】回到地表才能补给与升级", labelStyle);
                 GUI.color = Color.white;
+
+                // DEV-011：地下风险提示（轻量 V1：不遮挡核心画面，不做风险仪表盘）
+                var risk = gm != null ? gm.RunRisk : null;
+                if (risk != null && p != null && !risk.RunSecured)
+                {
+                    GUI.color = new Color(1f, 0.72f, 0.35f);
+                    GUILayout.Label($"未结算货物：${p.CargoValue}", labelStyle);
+                    GUILayout.Label($"失事预计损失：约 ${risk.EstimatedLostValue} + 打捞费 ${risk.EstimatedRecoveryFee}", labelStyle);
+                    GUILayout.Label($"失事保留约 {RiskExtractionCatalog.KeepRatioText}（规则见 PR）", labelStyle);
+                    GUI.color = Color.white;
+                }
             }
 
             if (showHelp)

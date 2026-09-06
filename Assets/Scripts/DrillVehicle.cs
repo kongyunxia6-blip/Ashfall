@@ -904,17 +904,22 @@ namespace Ashfall
         }
 
         /// <summary>
-        /// 失败后回到地表重生：货舱清空（损失），现金扣打捞费（GameManager 处理），
-        /// 燃料与服体【只部分恢复】。
+        /// 失败后回到地表重生：燃料与服体【只部分恢复】。
+        /// clearCargo=true（默认，M1 旧路径）：货舱清空（损失全在 RespawnAtSurface）；
+        /// clearCargo=false（DEV-011 RunRisk 路径）：Cargo 损失已在 ResolveFailure 按
+        /// 「部分保留」规则执行完毕，此处保留存活货物 —— 玩家可把幸存矿带回 SellTerminal。
         /// 【为什么不再满状态】原实现是 FullRestore 满油满血且不扣现金，
         /// 于是产生最优解：回程货舱空了就主动把燃料烧完 = 免费传送回地表 + 满状态，
         /// 还省了爬上去的油钱和时间。而「回程燃料够不够」正是全部紧张感的来源。
         /// </summary>
-        public void RespawnAtSurface(Vector3 spawnPos)
+        public void RespawnAtSurface(Vector3 spawnPos, bool clearCargo = true)
         {
             transform.position = spawnPos;
-            inventory.Clear();
-            SyncCargoStats();
+            if (clearCargo)
+            {
+                inventory.Clear();
+                SyncCargoStats();
+            }
 
             ApplyUpgradeStats();
             Fuel = MaxFuel * respawnFuelRatio;

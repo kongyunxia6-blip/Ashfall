@@ -31,6 +31,16 @@ namespace Ashfall
     }
 
     /// <summary>
+    /// DEV-011：一笔货物损失的明细行（def + 损失件数）。供 ApplyFractionalLoss 返回、失败摘要展示。
+    /// </summary>
+    [Serializable]
+    public struct LossLine
+    {
+        public TileDefinition def;
+        public int lost;
+    }
+
+    /// <summary>
     /// 格子背包：6 列固定，行数随货舱等级增长。
     ///
     /// 【两套约束，各管一件事】
@@ -224,6 +234,89 @@ namespace Ashfall
                 slots[i].ownerIndex = -1;
             }
             Notify();
+        }
+
+        /// <summary>
+        /// DEV-011：确定性「按比例保留」损失 —— 死亡/失败时对每种货物保留 keep = floor(count × keepRatio)，
+        /// 其余（loss = count - keep）按稳定顺序移除。
+        ///
+        /// 规则（可解释、可测试、无随机）：
+        ///  - 同种 def 跨多堆时先聚合总数再整体取 keep（避免逐堆 floor 造成隐性多损）；
+        ///  - 移除顺序 = 槽下标升序，先清空靠前堆再动后面的（确定性）；
+        ///  - 绝不生成负数量；不会把整舱清空后随机重加；
+        ///  - 返回每种货物损失件数明细（LossLine[]，无损失返回空数组）。
+        /// 调用方若持有 CargoValue/CargoWeight 等缓存，请在返回后重新同步（本类会发 OnChanged）。
+        /// </summary>
+        public LossLine[] ApplyFractionalLoss(float keepRatio)
+        {
+            if (slots.Length == 0 || slots == null) return Array.Empty<LossLine>();
+            keepRatio = Mathf.Clamp01(keepRatio);
+
+            // 1) 按槽升序首次出现顺序聚合每 def 总数
+            var totals = new System.Collections.Generic.List<System.Collections.Generic.KeyValuePair<TileDefinition, int>>();
+            for (int i = 0; i < slots.Length; i++)
+            {
+                var s = slots[i];
+                if (!s.isPrimary || s.IsEmpty) continue;
+                bool found = false;
+                for (int k = 0; k < totals.Count; k++)
+                {
+                    if (totals[k].Key == s.def)
+                    {
+                        totals[k] = new System.Collections.Generic.KeyValuePair<TileDefinition, int>(
+                            totals[k].Key, totals[k].Value + s.count);
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) totals.Add(new System.Collections.Generic.KeyValuePair<TileDefinition, int>(s.def, s.count));
+            }
+
+            // 2) 逐 def 移除超额部分（确定性：槽升序，先清空靠前堆）
+            var lostList = new System.Collections.Generic.List<LossLine>();
+            bool anyChange = false;
+            for (int t = 0; t < totals.Count; t++)
+            {
+                var def = totals[t].Key;
+                int total = totals[t].Value;
+                int keep = Mathf.FloorToInt(total * keepRatio);
+                int toRemove = total - keep;
+                if (toRemove <= 0) continue;
+
+                int removed = 0;
+                for (int i = 0; i < slots.Length && removed < toRemove; i++)
+                {
+                    var s = slots[i];
+                    if (!s.isPrimary || s.def != def || s.count <= 0) continue;
+                    int take = Mathf.Min(s.count, toRemove - removed);
+                    s.count -= take;
+                    removed += take;
+                    if (s.count <= 0) ReleaseRun(i);
+                }
+                if (removed > 0)
+                {
+                    anyChange = true;
+                    lostList.Add(new LossLine { def = def, lost = removed });
+                }
+            }
+
+            if (anyChange) Notify();
+            return lostList.ToArray();
+        }
+
+        /// <summary>DEV-011：按确定性保留规则估算损失价值（只读，不修改货舱）。用于 HUD 预估展示。</summary>
+        public int EstimatedLossValue(float keepRatio)
+        {
+            keepRatio = Mathf.Clamp01(keepRatio);
+            int lossValue = 0;
+            for (int i = 0; i < slots.Length; i++)
+            {
+                var s = slots[i];
+                if (!s.isPrimary || s.IsEmpty) continue;
+                int loss = s.count - Mathf.FloorToInt(s.count * keepRatio);
+                lossValue += loss * s.def.value;
+            }
+            return lossValue;
         }
 
         // ---------- 查询 ----------

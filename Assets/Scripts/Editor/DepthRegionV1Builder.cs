@@ -45,11 +45,17 @@ namespace Ashfall.EditorTools
         public static void BuildEquipmentProgressionV1()
             => BuildCore("Assets/Scenes/EquipmentProgressionV1Test.unity", true, "DEV-010");
 
+        [MenuItem("灰烬之下/搭建 DEV-011 风险撤离测试场景")]
+        public static void BuildRiskExtractionV1()
+            => BuildCore("Assets/Scenes/RiskExtractionV1Test.unity", true, "DEV-011", true);
+
         /// <summary>
         /// 共用搭建核心。useEquipment = true → 挂 EquipmentProgression（四条线+模块，属性源切换）；
         /// false → 挂旧 UpgradeSystem（原 DEV-009 行为，零回归）。布局/seed/区域带完全一致。
+        /// attachRisk = true（DEV-011）→ 额外挂 RunRiskState（Run 生命周期 + Cargo 部分保留 +
+        /// Recovery Fee 结算），并把 Sell/Refuel/Workbench/HUD 引用一并接好。
         /// </summary>
-        public static void BuildCore(string scenePath, bool useEquipment, string tag)
+        public static void BuildCore(string scenePath, bool useEquipment, string tag, bool attachRisk = false)
         {
             var db = AssetDatabase.LoadAssetAtPath<TileDatabase>($"{DataFolder}/TileDatabase.asset");
             var iron = AssetDatabase.LoadAssetAtPath<TileDefinition>($"{DataFolder}/Iron_铁矿.asset");
@@ -263,6 +269,22 @@ namespace Ashfall.EditorTools
             gm.usePlayerStartAsSpawn = true;
             gm.spawnPoint = spawnPos;
 
+            // DEV-011：风险撤离权威（Run 生命周期/失败结算；需在 GameManager 同体，Awake 互查 GetComponent）
+            if (attachRisk)
+            {
+                var risk = gmGo.AddComponent<RunRiskState>();
+                risk.gameManager = gm;
+                risk.regionProgression = prog;
+                risk.vehicle = vehicle;
+
+                // DEV-011 验收探针（Play 自动跑 Run 生命周期/幂等性/装备回归，写 d11_play_result.txt）
+                var probe = gmGo.AddComponent<RiskExtractionV1Probe>();
+                probe.iron = iron;
+                probe.copper = copper;
+                probe.autoRun = true;
+                probe.resultFile = @"C:/Users/58058/.workbuddy/tools/d11_play_result.txt";
+            }
+
             gmGo.AddComponent<BlockDropHook>().grid = digGrid;
             gmGo.AddComponent<BlockVisualController>().grid = digGrid;
 
@@ -356,7 +378,8 @@ namespace Ashfall.EditorTools
                       $"spaces={spaceGen.Spaces.Count} empty={spaceGen.TotalEmptyCells}，" +
                       $"veins={oreGen.Veins.Count} planted={oreGen.TotalCellsPlanted}。" +
                       $"功能区 x=6/14/22/30；坑口 x={GridWidth / 2}±3。" +
-                      (useEquipment ? " 装备源 = EquipmentProgression" : " 装备源 = UpgradeSystem"));
+                      (useEquipment ? " 装备源 = EquipmentProgression" : " 装备源 = UpgradeSystem") +
+                      (attachRisk ? " + RunRiskState（DEV-011 风险撤离/失败结算）" : ""));
         }
 
         // ---------- 工具 ----------
