@@ -121,6 +121,8 @@ namespace Ashfall
                     // RunEquipmentRegression 是同步方法(无 yield)，可安全在迭代器内直接 try/catch。
                     try { RunEquipmentRegression(sb); }
                     catch (Exception e) { sb.AppendLine("EXCEPTION[F]: " + e); }
+                    // DEV-011 fix：multi-stack 估算损失 == 实际结算损失（跨多堆不逐堆 floor）
+                    Step(MultiStackLossEstimate(sb), sb, "D11FIX");
                 }
                 else
                 {
@@ -330,6 +332,46 @@ namespace Ashfall
             Flush(sb);
         }
 
+        // ---------- DEV-011 fix: multi-stack 估算 == 实际结算 ----------
+
+        /// <summary>
+        /// 同种矿跨多个 stack 时，EstimatedLossValue（HUD 预估）必须与 ApplyFractionalLoss（失败结算）
+        /// 用完全相同的「按 def 聚合总数后再 floor」规则，得到完全一致的价值损失。
+        /// 用独立 InventoryGrid + 真实铁资产跑运行时 API（不依赖 vehicle 载重），播放模式真实验证。
+        /// </summary>
+        IEnumerator MultiStackLossEstimate(StringBuilder sb)
+        {
+            logs.Clear(); passCount = failCount = 0;
+            sb.AppendLine("==== DEV-011 fix: multi-stack 估算 == 实际结算损失 ====");
+
+            // 独立 6 列网格，载重上限放够，塞超过单格上限的铁自动分多堆
+            var g = new InventoryGrid();
+            g.Resize(4, 200f);
+            int want = iron.stackLimit + 6;          // 例如 16+6=22 → 至少 2 个主槽堆
+            g.AddItem(iron, want);
+            int stacks = CountPrimaryStacks(g, iron);
+            int total = CountTotalOf(g, iron);
+
+            int estimate = g.EstimatedLossValue(RiskExtractionCatalog.CargoKeepRatio);
+            int valueBefore = g.TotalValue;
+            var lost = g.ApplyFractionalLoss(RiskExtractionCatalog.CargoKeepRatio);
+            int actualLostValue = 0;
+            foreach (var l in lost) actualLostValue += l.def.value * l.lost;
+            int valueAfter = g.TotalValue;
+
+            Assert(total == want, "Fix_Split_TotalIntact",
+                $"铁塞入 {total}/{want} 件（应全装入）");
+            Assert(stacks >= 2, "Fix_Split_ActuallySplit",
+                $"铁实际占用 {stacks} 个主槽堆（需 ≥2 才命中跨堆回归场景）");
+            Assert(estimate == actualLostValue, "Fix_EstimateEqualsActualLoss",
+                $"估算 ${estimate} == 实际结算损失 ${actualLostValue}（跨 {stacks} 堆，聚合后再 floor）");
+            Assert(valueBefore == valueAfter + actualLostValue, "Fix_ValueConserved",
+                $"守恒: before ${valueBefore} = after ${valueAfter} + lost ${actualLostValue}");
+
+            Flush(sb);
+            yield break;
+        }
+
         // ---------- 工具 ----------
 
         static int CountCargo(DrillVehicle vehicle, TileDefinition def)
@@ -341,6 +383,30 @@ namespace Ashfall
             {
                 var s = inv.GetSlot(i);
                 if (s != null && s.isPrimary && s.def == def) n += s.count;
+            }
+            return n;
+        }
+
+        static int CountTotalOf(InventoryGrid g, TileDefinition def)
+        {
+            if (g == null || def == null) return 0;
+            int n = 0;
+            for (int i = 0; i < g.Capacity; i++)
+            {
+                var s = g.GetSlot(i);
+                if (s != null && s.isPrimary && s.def == def) n += s.count;
+            }
+            return n;
+        }
+
+        static int CountPrimaryStacks(InventoryGrid g, TileDefinition def)
+        {
+            if (g == null || def == null) return 0;
+            int n = 0;
+            for (int i = 0; i < g.Capacity; i++)
+            {
+                var s = g.GetSlot(i);
+                if (s != null && s.isPrimary && !s.IsEmpty && s.def == def) n++;
             }
             return n;
         }

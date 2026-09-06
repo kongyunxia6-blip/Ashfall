@@ -139,17 +139,24 @@ namespace Ashfall
         }
 
         /// <summary>
-        /// 本 Run 货物已安全出售（SellTerminal 结算成功后调用）。
-        /// RunSecured=true → 未结算风险清零；玩家再次离开地表才开新 Run。
+        /// 本 Run 货物已安全出售（SellTerminal 结算成功后调用，earned &gt; 0）。
+        /// 语义（DEV-011 fix）：卖货成功即【结束当前 Run】——
+        ///   RunActive = false（本 Run 已结算收官）＋ RunSecured = true（未结算风险清零）。
+        /// 因为 Sell 必然发生在地表（IsAtSurface=true），此时置 RunActive=false 不会触发
+        /// LateUpdate 的 BeginRun（需离地才触发）。玩家下一次真正离开地表（IsAtSurface=false）
+        /// 时，LateUpdate 的 `!IsAtSurface && !RunActive` 成立 → BeginRun()：
+        ///   RunNumber+1、reset MaxDepthThisRun/DeepestRegionThisRun/first-enter（MaxDepthEver 永不清）。
+        /// 【修复前缺陷】本方法只置 RunSecured、从不结束 Run，导致 Sell 后 RunActive 恒为 true，
+        /// 玩家再次下矿不触发 BeginRun，RunNumber 不递增、深度/首入统计也不 reset。
         /// </summary>
         public void NotifyCargoSecured(int earned)
         {
-            if (earned > 0)
-            {
-                RunSecured = true;
-                Debug.Log($"[RunRiskState] 本次货物已安全结算 +${earned}（RunSecured=true，风险清零）");
-                NotifyChanged();
-            }
+            if (earned <= 0) return;   // 无实际收益不结算（TrySell 已保证 earned>0 才调用，双保险）
+            RunActive = false;         // 结束本 Run：本次下矿-返航-出售 的生命周期收官
+            RunSecured = true;         // 本次货物已安全结算，风险清零
+            Debug.Log($"[RunRiskState] 本次货物已安全结算 +${earned} → 本 Run 结束（RunActive=false, RunSecured=true）" +
+                      $"；下次离开地表将开新 Run（Run #{RunNumber + 1}，MaxDepthEver 保留）");
+            NotifyChanged();
         }
 
         /// <summary>
