@@ -73,6 +73,8 @@ namespace Ashfall
         /// <summary>
         /// 出售全部矿物。返回本次收益；0 = 空舱 / 无效（不结算、不加钱）。
         /// 测试 / 脚本可直接调用（等价玩家按 E 的结算路径）。
+        /// DEV-011：成功出售后通知 RunRiskState.NotifyCargoSecured —— 本次 Run 货物正式安全结算，
+        /// 未结算风险清零；玩家再次离开地表才开启新 Run。
         /// </summary>
         public int TrySell(DrillVehicle v)
         {
@@ -85,6 +87,9 @@ namespace Ashfall
             gm.AddCash(earned);
             gm.LastServiceMessage = $"出售矿物 +${earned}  现金 ${gm.Cash}";
             Debug.Log($"[SellTerminal] 出售矿物 +${earned}，现金 ${gm.Cash}");
+
+            if (gm.RunRisk != null)
+                gm.RunRisk.NotifyCargoSecured(earned);
 
             if (alsoRefuel)
             {
