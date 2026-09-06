@@ -72,35 +72,50 @@ namespace Ashfall
             }
 
             var inv = vehicle.Inventory;
-            // 预检：rewardProfile 每一项都要能【完整】装下
-            bool canFitAll = true;
+
+            // 【整包原子预检】把 rewardProfile 全量解析成请求数组，一次交给
+            // inv.CanAcceptFullBatch —— 在虚拟库存快照上按真实 AddItem 顺序逐个模拟整个档案，
+            // 所有奖励共享同一虚拟占用状态。只有全部奖励都能完整装下（每项 leftover==0）才返回 true；
+            // 任一装不下 → 整包拒绝（不标 investigated、不全发、不清空，玩家腾空间后可重试）。
+            // 这修复上一轮"分别对每项 CanAcceptFull()、不共享占用状态 → 部分奖励丢失却标 investigated"的漏洞。
+            var requests = new System.Collections.Generic.List<InventoryGrid.AddItemRequest>();
             for (int i = 0; i < profile.Length; i++)
             {
                 var tile = ResolveRewardTile(profile[i].stableId);
                 if (tile == null) continue;
-                if (!inv.CanAcceptFull(tile, profile[i].count)) { canFitAll = false; break; }
+                requests.Add(new InventoryGrid.AddItemRequest(tile, profile[i].count));
             }
 
-            if (!canFitAll)
+            if (requests.Count > 0 && !inv.CanAcceptFullBatch(requests.ToArray()))
             {
-                // 容量不足：不标 investigated，不部分发放；给明确提示，玩家腾空间后回来重试。
+                // 容量不足（含仅差一点点、各自单独能放但合起来放不下的 partial capacity）：整包拒绝。
                 LastVerdict = "reward_blocked_no_cargo_space";
                 LastRewardText = "";
-                PostMessage(inst, $"调查「{inst.definition.displayName}」需要先腾出背包空间（文明资源将完整发放），当前载重/格子不足。请卸下部分货物后再来调查。");
+                PostMessage(inst, $"调查「{inst.definition.displayName}」需要先腾出背包空间（文明资源将完整发放，一次全部入包）。当前载重/格子不足。请卸下部分货物后再来调查。");
                 return true;
             }
 
-            // 全量发奖（预检已保证全部装下，AddItem 返回 0）
+            // 全量发奖。预检已保证每项都能完整装下 → 实际 AddItem 每项 left 必为 0；
+            // 此处仍加防御：若有任何一项 left>0，则不 MarkInvestigated（绝不"部分发放却永久调查完成"）。
             string got = "";
-            for (int i = 0; i < profile.Length; i++)
+            bool allPlaced = true;
+            for (int i = 0; i < requests.Count; i++)
             {
-                var spec = profile[i];
-                var tile = ResolveRewardTile(spec.stableId);
-                if (tile == null) continue;
-                int left = inv.AddItem(tile, spec.count);
-                int accepted = Mathf.Max(0, spec.count - left);
+                var req = requests[i];
+                int left = inv.AddItem(req.def, req.count);
+                if (left > 0) { allPlaced = false; break; }
+                int accepted = Mathf.Max(0, req.count - left);
                 if (accepted > 0)
-                    got += (got.Length > 0 ? "、" : "") + tile.displayName + "×" + accepted;
+                    got += (got.Length > 0 ? "、" : "") + req.def.displayName + "×" + accepted;
+            }
+
+            if (!allPlaced)
+            {
+                // 防御性兜底：理论不应发生（预检全量通过）。出现即视为发放未守恒，退回 blocked 状态。
+                LastVerdict = "reward_blocked_unexpected_leftover";
+                LastRewardText = "";
+                PostMessage(inst, $"调查「{inst.definition.displayName}」文明资源未能完整入包，已中止本次调查。请稍后再试。");
+                return true;
             }
 
             // 全量发放成功后才标记 investigated（幂等基准）

@@ -231,10 +231,10 @@ namespace Ashfall
                 new Vector2Int(c.x, c.y + 1), new Vector2Int(c.x, c.y - 1),
             };
 
-        // ---------- F. AncientRelayCore 一次性调查 + 首奖守恒（Blocker3：full cargo / retry） ----------
+        // ---------- F. AncientRelayCore 一次性调查 + 整包原子首奖守恒（Blocker3 二轮：full/partial/恰够/跨stack/retry） ----------
         IEnumerator F_AncientRelayCore()
         {
-            sb.AppendLine("\n==== F. AncientRelayCore 一次性调查 + 首奖守恒（full cargo / retry） ====");
+            sb.AppendLine("\n==== F. AncientRelayCore 一次性调查 + 整包原子首奖守恒（full/partial/恰够/跨stack/retry） ====");
             if (grid == null || core == null || vehicle == null)
             {
                 Assert(false, "F_Rig", "缺 core/vehicle"); yield break;
@@ -253,44 +253,90 @@ namespace Ashfall
             if (inv == null) { Assert(false, "F_NoInv", "玩家无 Inventory"); yield break; }
             Assert(!discovery.IsInvestigated(ruin.instanceId), "F_Pre_Uninvestigated", "F 起点遗迹未被调查（可测首奖）");
 
-            // ---- Phase A：背包满 → 应【拒绝】且【不标 investigated】、【不全发、无部分发放】（不静默吞首奖）----
+            // 奖励几何（默认货舱 12 格、载重 24；fragment×1 + alloy×3，alloy 3≤stack16 各占 1 格，
+            // 共需 2 个空格 + 载重 2.6）。wallAsset 为 weight0/stackLimit1 的占位货物 → 可精确留下 N 个空格。
+            int needFreeSlotsForReward = 2;
+
+            // ---- Phase A：仅剩 1 个空格（partial capacity）—— 上一轮漏测的 Blocker 反例 ----
+            // fragment×1 单独能放（1 空格够）、alloy×3 单独也能放（1 空格够），但合起来需 2 空格 → 整包必须拒绝。
+            inv.Clear();
+            FillToFreeSlots(inv, 1);   // 占掉 cap-1 格，只剩 1 个空格
+            Assert(FreeSlots(inv) == 1, "F_A_OneFree", $"已占至仅剩 1 个空格（free={FreeSlots(inv)}）");
+            Assert(inv.CanAcceptFull(fragmentAsset, 1), "F_A_Solo_Frag_Fits",
+                "仅 1 空格时 fragment×1 单独预检可放（各自独立看都够）");
+            Assert(inv.CanAcceptFull(alloyAsset, 3), "F_A_Solo_Alloy_Fits",
+                "仅 1 空格时 alloy×3 单独预检也可放（各自独立看都够）");
+            bool batchRejectsPartial = !inv.CanAcceptFullBatch(RewardRequests());
+            Assert(batchRejectsPartial, "F_A_Batch_Rejects_Partial",
+                $"整包原子预检：fragment×1+alloy×3 需 {needFreeSlotsForReward} 空格 > 现有 1 → 整包拒绝（修复'各自单独能放却合起来放不下'）");
+
+            var snapPartial = Snapshot(vehicle);
+            int cashP = CashNow();
+            var resPartial = vehicle.TryDigHit(cc);
+            Assert(resPartial == DigHitResult.Interacted, "F_A_Partial_Interacted", "仅 1 空格命中 Core 仍 Interacted");
+            Assert(core.LastVerdict == "reward_blocked_no_cargo_space", "F_A_Partial_Blocked",
+                $"partial capacity（仅 1 空格）→ 整包拒绝（{core.LastVerdict}），不标调查");
+            Assert(!discovery.IsInvestigated(ruin.instanceId), "F_A_Partial_Not_Investigated",
+                "partial capacity → 不标 investigated（遗迹仍可后续重试，不永久吞首奖）");
+            Assert(inventoryDelta(snapPartial) == 0, "F_A_Partial_NoPartialGrant",
+                "partial capacity 被拒：无任何部分/全量奖励入包（Inventory 净增 0）");
+            Assert(cashP == CashNow(), "F_A_Partial_NoCashChange", "partial 拒绝不扣现金（无副作用）");
+            inv.Clear();
+
+            // ---- Phase A2：背包满载（载重满）→ 整包拒绝，不标调查 ----
             {
                 float room = inv.MaxWeight - inv.TotalWeight;
                 int need = room > 0.0001f ? Mathf.CeilToInt(room / 0.8f) + 2 : 2;   // 用 alloy 补满载重
                 if (need > 0) inv.AddItem(alloyAsset, need);
 
-                bool rewardWontFit = !inv.CanAcceptFull(fragmentAsset, 1) || !inv.CanAcceptFull(alloyAsset, 3);
-                Assert(rewardWontFit, "F_A_CargoFull",
-                    $"背包接近满载（weight={inv.TotalWeight:F1}/{inv.MaxWeight:F1}），奖励应放不下");
+                bool rewardWontFit = !inv.CanAcceptFullBatch(RewardRequests());
+                Assert(rewardWontFit, "F_A2_CargoFull", $"背包近满载（weight={inv.TotalWeight:F1}/{inv.MaxWeight:F1}），整包预检应拒");
 
                 var snapFull = Snapshot(vehicle);
-                int cashA = GameManager.Instance != null ? GameManager.Instance.Cash : 0;
+                int cashA = CashNow();
                 var resBlock = vehicle.TryDigHit(cc);
-                Assert(resBlock == DigHitResult.Interacted, "F_A_Interacted", "满背包命中 Core 仍为 Interacted（交互动作不被吞）");
-                Assert(core.LastVerdict == "reward_blocked_no_cargo_space", "F_A_Blocked_Verdict",
-                    $"背包满 → 明确拒绝发奖（{core.LastVerdict}），给「腾空间重试」反馈");
-                Assert(!discovery.IsInvestigated(ruin.instanceId), "F_A_Not_Investigated",
-                    "背包满 → 不标 investigated（奖励不因满包而永久丢失）");
-                int deltaA = inventoryDelta(snapFull);
-                Assert(deltaA == 0, "F_A_NoPartialGrant", $"满背包被拒：无任何部分/全量奖励入包（Inventory 净增 {deltaA}）");
-                Assert(cashA == (GameManager.Instance != null ? GameManager.Instance.Cash : 0), "F_A_NoCashChange",
-                    "拒绝发奖不扣现金（无副作用）");
+                Assert(resBlock == DigHitResult.Interacted, "F_A2_Interacted", "满背包命中 Core 仍为 Interacted");
+                Assert(core.LastVerdict == "reward_blocked_no_cargo_space", "F_A2_Blocked_Verdict",
+                    $"满背包 → 整包拒绝（{core.LastVerdict}），给「腾空间重试」反馈");
+                Assert(!discovery.IsInvestigated(ruin.instanceId), "F_A2_Not_Investigated",
+                    "满背包 → 不标 investigated");
+                Assert(inventoryDelta(snapFull) == 0, "F_A2_NoPartialGrant",
+                    $"满背包被拒：无部分/全量奖励入包（Inventory 净增 {inventoryDelta(snapFull)}）");
+                Assert(cashA == CashNow(), "F_A2_NoCashChange", "拒绝发奖不扣现金");
             }
 
-            // ---- Phase B：腾空 → 重试 → 全量首奖 + 总量守恒 ----
+            // ---- Phase A3：单件跨多 stackLimit 的容量模拟正确性（同种物品需跨多个堆，不再重复看到同一空槽）----
+            // 旧 CanAcceptFull 每开一个新格都重新 FindFreeRun、且占用不被消耗 → 1 个空格 + alloy×20（需 2 堆）会误判能装。
             inv.Clear();
-            var snapEmpty = Snapshot(vehicle);
+            FillToFreeSlots(inv, 1);
+            Assert(!inv.CanAcceptFull(alloyAsset, 20), "F_A3_MultiStack_1Slot_Reject",
+                $"仅 1 空格时单件 alloy×20（stackLimit16，需 2 堆）单独预检应拒（旧实现会重复看到同一空槽误判）");
+            Assert(!inv.CanAcceptFullBatch(new[] { new InventoryGrid.AddItemRequest(alloyAsset, 20) }), "F_A3_Batch_MultiStack_1Slot",
+                "整包预检对跨 2 堆的单件同样拒绝");
+            inv.Clear();
+            FillToFreeSlots(inv, 2);
+            Assert(inv.CanAcceptFullBatch(new[] { new InventoryGrid.AddItemRequest(alloyAsset, 20) }), "F_A3_MultiStack_2Slot_Fits",
+                $"恰 2 空格时 alloy×20 跨 2 堆可完整入包（预检通过，消耗两格不重看同一格）");
+            inv.Clear();
+
+            // ---- Phase B：恰好足够（2 个空格，恰装下整包）→ 重试 → 全量首奖 + 总量守恒 ----
+            FillToFreeSlots(inv, needFreeSlotsForReward);   // 恰留 2 格 = reward 需要，且能全部装下
+            Assert(inv.CanAcceptFullBatch(RewardRequests()), "F_B_JustEnough_BatchFits",
+                $"恰好足够（{needFreeSlotsForReward} 空格）→ 整包原子预检通过（可发全量，无部分发放风险）");
+            var snapJust = Snapshot(vehicle);
+            int cashB = CashNow();
             var resGrant = vehicle.TryDigHit(cc);
-            Assert(resGrant == DigHitResult.Interacted, "F_B_Retry_Interacted", "腾空后重试命中 Core → Interacted");
-            Assert(discovery.IsInvestigated(ruin.instanceId), "F_B_Investigated", "腾空后重试 → 标记 investigated=true");
+            Assert(resGrant == DigHitResult.Interacted, "F_B_Retry_Interacted", "恰够后重试命中 Core → Interacted");
+            Assert(discovery.IsInvestigated(ruin.instanceId), "F_B_Investigated", "恰够后重试 → 标记 investigated=true");
             Assert(core.LastVerdict == "investigated_first_time", "F_B_First_Verdict", "Core 状态 = investigated_first_time");
-            Assert(!snapEmpty.hasFragment && HasItem(vehicle, fragmentAsset), "F_B_Reward_Fragment",
+            Assert(!snapJust.hasFragment && HasItem(vehicle, fragmentAsset), "F_B_Reward_Fragment",
                 "全量首奖：AncientDataFragment×1 进入现有 Inventory");
             Assert(Snapshot(vehicle).alloyCount >= 3, "F_B_Reward_Alloy",
                 $"全量首奖：AncientAlloy×3 进入现有 Inventory（实得 {Snapshot(vehicle).alloyCount}）");
-            int deltaGrant = inventoryDelta(snapEmpty);
+            int deltaGrant = inventoryDelta(snapJust);
             Assert(deltaGrant >= 4, "F_B_Conservation_Total",
                 $"首奖总量守恒：fragment×1 + alloy×3 全量入包（Inventory 净增 {deltaGrant} 件，不丢不复制）");
+            Assert(cashB == CashNow(), "F_B_NoCashSideEffect", "发奖不改现金（文明资源走 Cargo，不直接换钱）");
 
             // ---- Phase C：二次 → 已调查，不再发首奖（幂等，不复制） ----
             var snapAfter1 = Snapshot(vehicle);
@@ -302,6 +348,35 @@ namespace Ashfall
             Assert(got2 == 0, "F_C_Second_NoRepeat", $"二次交互不重复发首奖（Inventory 净增 {got2}）");
             Assert(core.LastVerdict == "already_investigated", "F_C_Second_Verdict", "Core 状态 = already_investigated");
         }
+
+        // 组装 rewardProfile 对应的整包请求数组（fragment×1 + alloy×3）
+        InventoryGrid.AddItemRequest[] RewardRequests() => new[]
+        {
+            new InventoryGrid.AddItemRequest(fragmentAsset, 1),
+            new InventoryGrid.AddItemRequest(alloyAsset, 3),
+        };
+
+        // 用 wallAsset（weight0 / stackLimit1 / gridWidth1）占格，把背包清空后精确留出 free 个空格。
+        void FillToFreeSlots(InventoryGrid inv, int free)
+        {
+            inv.Clear();
+            int fill = inv.Capacity - free;
+            if (fill > 0) inv.AddItem(wallAsset, fill);
+        }
+
+        // 当前空格数（未被占用的格）
+        int FreeSlots(InventoryGrid inv)
+        {
+            int f = 0;
+            for (int i = 0; i < inv.Capacity; i++)
+            {
+                var s = inv.GetSlot(i);
+                if (s == null || s.def == null) f++;
+            }
+            return f;
+        }
+
+        int CashNow() => GameManager.Instance != null ? GameManager.Instance.Cash : 0;
 
         // 简易背包快照（只关心 fragment/alloy 计数 + 总件数）
         class InvSnap { public bool hasFragment; public int alloyCount; public int totalItems; }

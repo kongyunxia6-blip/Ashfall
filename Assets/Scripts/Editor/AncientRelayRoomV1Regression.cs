@@ -99,6 +99,73 @@ namespace Ashfall.EditorTools
 
             // ---- E. Blocker2：EquipmentProgression ownedModules 旧序列化迁移自愈 ----
             E_OwnedModules_Migration(sb, ref pass, ref fail);
+
+            // ---- F. Blocker3：InventoryGrid 整包原子预检 CanAcceptFullBatch（纯 C# 编辑态） ----
+            F_BatchAtomic(sb, ref pass, ref fail);
+        }
+
+        // ---------- F. Blocker3：整包原子预检 CanAcceptFullBatch（上一轮"分项预检不共享占用"漏洞的编辑级复现） ----------
+        static void F_BatchAtomic(StringBuilder sb, ref int pass, ref int fail)
+        {
+            // 受控 InventoryGrid：6 列 × 2 行 = 12 格，载重 24。占位货物 = weight0/stackLimit1 → 可精确留空格。
+            var inv = new InventoryGrid();
+            inv.Resize(2, 24f);
+            Assert(inv.Capacity == 12, "F_Rig_12", $"测试货舱 12 格（capacity={inv.Capacity}）", sb, ref pass, ref fail);
+
+            var filler = MakeCargoTile("filler", 0f, 1);    // weight0, stackLimit1, gridWidth1
+            var frag = MakeCargoTile("frag", 0.2f, 16);     // 模拟 AncientDataFragment
+            var alloy = MakeCargoTile("alloy", 0.8f, 16);   // 模拟 AncientAlloy
+
+            // (1) 只剩 1 个空格：fragment×1 单独能放、alloy×3 单独也能放，但整包（需 2 空格）必须拒绝。
+            FillToFree(inv, filler, 1);
+            Assert(inv.CanAcceptFull(frag, 1), "F_Partial_SoloFrag",
+                "仅 1 空格：fragment×1 单独预检可放", sb, ref pass, ref fail);
+            Assert(inv.CanAcceptFull(alloy, 3), "F_Partial_SoloAlloy",
+                "仅 1 空格：alloy×3 单独预检也可放（各自独立看都够 → 旧分项预检会误判）", sb, ref pass, ref fail);
+            Assert(!inv.CanAcceptFullBatch(new[] { new InventoryGrid.AddItemRequest(frag, 1), new InventoryGrid.AddItemRequest(alloy, 3) }),
+                "F_Partial_Batch_Reject",
+                "整包原子预检：fragment×1+alloy×3 需 2 空格 > 现有 1 → 拒绝（不再“部分奖励丢失却标调查”）", sb, ref pass, ref fail);
+            Assert(inv.UsedSlots == 11, "F_Partial_NoMutate", "整包拒绝不污染真实 slots（仍占 11 格）", sb, ref pass, ref fail);
+
+            // (2) 跨多个 stackLimit：单件 alloy×20（>16 需 2 堆）。1 空格应拒（旧实现重复命中同一空槽误判）、2 空格应成。
+            inv.Clear();
+            FillToFree(inv, filler, 1);
+            Assert(!inv.CanAcceptFullBatch(new[] { new InventoryGrid.AddItemRequest(alloy, 20) }),
+                "F_MultiStack_1Free_Reject",
+                "仅 1 空格：alloy×20 需跨 2 堆 → 整包拒绝（单件跨 stack 不重看同一空槽）", sb, ref pass, ref fail);
+            inv.Clear();
+            FillToFree(inv, filler, 2);
+            Assert(inv.CanAcceptFullBatch(new[] { new InventoryGrid.AddItemRequest(alloy, 20) }),
+                "F_MultiStack_2Free_Fits",
+                "恰 2 空格：alloy×20 跨 2 堆可完整入包（消耗两格）", sb, ref pass, ref fail);
+
+            // (3) 预检通过 → AddItem 实际 leftover 必为 0（模拟与真实发放同构，不丢不复制）
+            inv.Clear();
+            FillToFree(inv, filler, 2);
+            bool batchOk = inv.CanAcceptFullBatch(new[] { new InventoryGrid.AddItemRequest(frag, 1), new InventoryGrid.AddItemRequest(alloy, 3) });
+            int leftFrag = inv.AddItem(frag, 1);
+            int leftAlloy = inv.AddItem(alloy, 3);
+            Assert(batchOk && leftFrag == 0 && leftAlloy == 0, "F_Predict_AddItemZero",
+                "整包预检通过 → AddItem 每项 left==0（预检精确预测真实发放，无部分/复制）", sb, ref pass, ref fail);
+        }
+
+        // 用 weight0/stackLimit1 占位货物把背包清空并精确留 free 个空格
+        static void FillToFree(InventoryGrid inv, TileDefinition filler, int free)
+        {
+            inv.Clear();
+            int fill = inv.Capacity - free;
+            if (fill > 0) inv.AddItem(filler, fill);
+        }
+
+        static TileDefinition MakeCargoTile(string name, float weight, int stackLimit)
+        {
+            var t = ScriptableObject.CreateInstance<TileDefinition>();
+            t.displayName = "rig_" + name;
+            t.weight = weight;
+            t.stackLimit = stackLimit;
+            t.gridWidth = 1;
+            t.value = 1;
+            return t;
         }
 
         // ---------- E. ownedModules 4→5 迁移自愈（Blocker2） ----------

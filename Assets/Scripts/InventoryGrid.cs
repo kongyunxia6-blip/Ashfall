@@ -114,53 +114,136 @@ namespace Ashfall
 
         public bool IsFullByWeight => TotalWeight >= maxWeight - 0.0001f;
 
+        /// <summary>一次发放请求（def + 件数）。供整包原子预检（CanAcceptFullBatch）使用。</summary>
+        public struct AddItemRequest
+        {
+            public TileDefinition def;
+            public int count;
+            public AddItemRequest(TileDefinition d, int c) { def = d; count = c; }
+        }
+
         /// <summary>
-        /// Blocker3（DEV-013）：只读预检 —— AddItem(def, amount) 能否【全部】装下（不修改任何状态）。
-        /// 与 AddItem 完全同构：先填同类未满堆，再开新格；受堆叠上限与载重上限双重限制。
+        /// Blocker3（DEV-013）：只读单件预检 —— AddItem(def, amount) 能否【全部】装下（不修改任何状态）。
+        /// 经整包原子模拟实现（见 CanAcceptFullBatch），同种物品跨多个 stackLimit 时不再重复看到同一空槽。
         /// 返回 true = 全部装入；false = 部分/全部装不下（调用方应拒绝发放，避免"部分奖励被静默吞"）。
         /// </summary>
         public bool CanAcceptFull(TileDefinition def, int amount)
         {
             if (def == null || amount <= 0) return true;
-            if (slots == null || slots.Length == 0) return false;
+            return CanAcceptFullBatch(new[] { new AddItemRequest(def, amount) });
+        }
+
+        /// <summary>
+        /// Blocker3（DEV-013，二轮修复）：【整包】原子预检 —— 一次发放多件奖励时，模拟能否【全部】装下。
+        ///
+        /// 上一轮漏洞：对每项奖励分别调 CanAcceptFull()，各次预检互不共享"虚拟占用状态"，
+        /// 于是"只剩 1 个空格但 fragment×1 单独能放、alloy×3 单独也能放"（两次都看到同一空格）
+        /// 会误判可装，真正发奖时 fragment 先占掉空格、alloy 装不下 —— 部分奖励丢失却仍 MarkInvestigated。
+        ///
+        /// 本实现：在 InventoryGrid 的【虚拟工作副本】上按请求顺序、依与 AddItem 完全同构的规则
+        /// 逐个模拟放置，所有奖励共享同一份占用状态；只有每一件都完整装下（left==0）才返回 true。
+        /// 真实 slots 完全不被改动（只读）。
+        ///
+        /// 同时修掉 CanAcceptFull 自身的"单件跨多 stack 重复看到同一空槽"误判 —— 旧实现每开一
+        /// 个新格都重新 FindFreeRun，占用的格不会真的被消耗，单个物品需要跨多个 stackLimit 时会
+        /// 反复命中同一个空槽而高估容量；本实现让模拟在副本上真实占格，占掉就不再可复用。
+        /// </summary>
+        public bool CanAcceptFullBatch(AddItemRequest[] batch)
+        {
+            if (batch == null) return true;
+            if (slots == null) return false;
+
+            // 虚拟工作副本：与真实 slots 同构、可自由就地占格；起点 == 当前真实占用/载重。
+            var sim = CloneSlots();
+            float total = TotalWeight;
+
+            for (int i = 0; i < batch.Length; i++)
+            {
+                var req = batch[i];
+                if (req.def == null || req.count <= 0) continue;
+                int left = PlaceInto(sim, rows, Columns, maxWeight, req.def, req.count, ref total);
+                if (left > 0) return false;   // 任一奖励没完整装下 → 整包拒绝（原子，共享占用）
+            }
+            return true;
+        }
+
+        /// <summary>深拷贝一格的工作副本（只复制占用相关字段，不共享引用可变状态）。</summary>
+        InventorySlot[] CloneSlots()
+        {
+            var c = new InventorySlot[slots.Length];
+            for (int i = 0; i < slots.Length; i++)
+            {
+                var s = slots[i];
+                c[i] = new InventorySlot
+                {
+                    def = s.def,
+                    count = s.count,
+                    isPrimary = s.isPrimary,
+                    ownerIndex = s.ownerIndex,
+                };
+            }
+            return c;
+        }
+
+        /// <summary>
+        /// 单件放置核心：把 amount 件 def 尽量放入目标格数组 arr（就地修改工作副本），
+        /// 并用 ref totalWeight 维护累计载重。规则与 AddItem 完全一致：
+        /// 先填同类未满堆，再开新格（横向连续 width）；受 stackLimit + maxWeight 双重限制。
+        /// 返回未放下的件数（leftover）。arr 可为真实 slots 也可为虚拟副本。
+        /// </summary>
+        static int PlaceInto(InventorySlot[] arr, int rows, int columns, float maxWeight,
+                             TileDefinition def, int amount, ref float total)
+        {
+            if (def == null || amount <= 0) return amount;
+            if (arr == null || arr.Length == 0) return amount;
 
             int width = Mathf.Max(1, def.gridWidth);
             int limit = Mathf.Max(1, def.stackLimit);
-            float total = TotalWeight;
-            int remaining = amount;
 
-            // 1) 先填同类未满堆（只读估算：不修改 s.count，仅用堆余量 + 载重判定吸收量）
-            for (int i = 0; i < slots.Length && remaining > 0; i++)
+            // 1. 先填同类未满堆
+            for (int i = 0; i < arr.Length && amount > 0; i++)
             {
-                var s = slots[i];
+                var s = arr[i];
                 if (!s.isPrimary || s.def != def || s.count >= limit) continue;
-                int room = limit - s.count;
-                int absorb = 0;
-                while (absorb < room && remaining > 0 && total + def.weight <= maxWeight + 0.0001f)
+                while (amount > 0 && s.count < limit)
                 {
-                    absorb++;
+                    if (total + def.weight > maxWeight + 0.0001f) return amount;   // 载重满，停止
+                    s.count++;
                     total += def.weight;
-                    remaining--;
+                    amount--;
                 }
-                if (remaining > 0 && total + def.weight > maxWeight + 0.0001f) return false; // 载重满
             }
 
-            // 2) 再开新格（横向连续 width 空槽）
-            while (remaining > 0)
+            // 2. 再开新格（横向连续 width 格）
+            while (amount > 0)
             {
-                int start = FindFreeRun(width);
-                if (start < 0) return false;   // 格子满
-                int want = Mathf.Min(remaining, limit);
+                int start = FindFreeRun(arr, rows, columns, width);
+                if (start < 0) return amount;   // 格子满
+                int want = Mathf.Min(amount, limit);
                 int placed = 0;
                 while (placed < want && total + def.weight <= maxWeight + 0.0001f)
                 {
                     placed++;
                     total += def.weight;
                 }
-                if (placed <= 0) return false; // 载重满，无法再开新堆
-                remaining -= placed;
+                if (placed <= 0) return amount; // 载重满，无法再开新堆
+
+                arr[start].def = def;
+                arr[start].count = placed;
+                arr[start].isPrimary = true;
+                arr[start].ownerIndex = -1;
+                for (int k = 1; k < width; k++)
+                {
+                    int idx = start + k;
+                    if (idx >= arr.Length) break;
+                    arr[idx].def = def;
+                    arr[idx].count = 0;
+                    arr[idx].isPrimary = false;
+                    arr[idx].ownerIndex = start;
+                }
+                amount -= placed;
             }
-            return true;
+            return amount;
         }
 
         // ---------- 容量 ----------
@@ -192,70 +275,16 @@ namespace Ashfall
         /// <summary>
         /// 放入物品。先填同类未满的堆，再开新格；受堆叠上限与载重上限双重限制。
         /// 返回「没装下的数量」——满舱时交给调用方决定是替换还是丢弃。
+        /// 内部委托统一的 PlaceInto 核心（与 CanAcceptFullBatch 的虚拟模拟同构），
+        /// 保证"预检说能装 → AddItem 一定全部装下（left==0）"。
         /// </summary>
         public int AddItem(TileDefinition def, int amount)
         {
-            if (def == null || amount <= 0) return amount;
-            if (slots.Length == 0) return amount;
-
-            int width = Mathf.Max(1, def.gridWidth);
-            int limit = Mathf.Max(1, def.stackLimit);
             float total = TotalWeight;
-
-            // 1. 先填已有的同类堆
-            for (int i = 0; i < slots.Length && amount > 0; i++)
-            {
-                var s = slots[i];
-                if (!s.isPrimary || s.def != def || s.count >= limit) continue;
-
-                while (amount > 0 && s.count < limit)
-                {
-                    if (total + def.weight > maxWeight + 0.0001f)
-                    {
-                        Notify();
-                        return amount;
-                    }
-                    s.count++;
-                    total += def.weight;
-                    amount--;
-                }
-            }
-
-            // 2. 再开新格（横向连续 width 格）
-            while (amount > 0)
-            {
-                int start = FindFreeRun(width);
-                if (start < 0) break;
-
-                int want = Mathf.Min(amount, limit);
-                int placed = 0;
-                while (placed < want && total + def.weight <= maxWeight + 0.0001f)
-                {
-                    placed++;
-                    total += def.weight;
-                }
-                if (placed <= 0) break;
-
-                slots[start].def = def;
-                slots[start].count = placed;
-                slots[start].isPrimary = true;
-                slots[start].ownerIndex = -1;
-
-                for (int k = 1; k < width; k++)
-                {
-                    int idx = start + k;
-                    if (idx >= slots.Length) break;
-                    slots[idx].def = def;
-                    slots[idx].count = 0;
-                    slots[idx].isPrimary = false;
-                    slots[idx].ownerIndex = start;
-                }
-
-                amount -= placed;
-            }
-
-            Notify();
-            return amount;
+            int before = amount;
+            int left = PlaceInto(slots, rows, Columns, maxWeight, def, amount, ref total);
+            if (left != before) Notify();
+            return left;
         }
 
         /// <summary>从指定格（或其所属主格）取出若干件，返回实际取出数量</summary>
@@ -442,25 +471,28 @@ namespace Ashfall
         }
 
         /// <summary>找同行内连续 width 个空格的起点，找不到返回 -1</summary>
-        int FindFreeRun(int width)
+        int FindFreeRun(int width) => FindFreeRun(slots, rows, Columns, width);
+
+        /// <summary>在任意格数组（真实 slots 或虚拟副本）上找连续 width 个空格的起点，找不到返回 -1</summary>
+        static int FindFreeRun(InventorySlot[] arr, int rows, int columns, int width)
         {
             if (width <= 1)
             {
-                for (int i = 0; i < slots.Length; i++)
-                    if (!slots[i].IsOccupied) return i;
+                for (int i = 0; i < arr.Length; i++)
+                    if (!arr[i].IsOccupied) return i;
                 return -1;
             }
 
             for (int row = 0; row < rows; row++)
             {
-                int rowStart = row * Columns;
-                for (int col = 0; col + width <= Columns; col++)
+                int rowStart = row * columns;
+                for (int col = 0; col + width <= columns; col++)
                 {
                     int idx = rowStart + col;
                     bool free = true;
                     for (int k = 0; k < width; k++)
                     {
-                        if (slots[idx + k].IsOccupied) { free = false; break; }
+                        if (arr[idx + k].IsOccupied) { free = false; break; }
                     }
                     if (free) return idx;
                 }
