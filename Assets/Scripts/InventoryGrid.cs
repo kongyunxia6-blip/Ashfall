@@ -304,16 +304,39 @@ namespace Ashfall
             return lostList.ToArray();
         }
 
-        /// <summary>DEV-011：按确定性保留规则估算损失价值（只读，不修改货舱）。用于 HUD 预估展示。</summary>
+        /// <summary>
+        /// DEV-011：按确定性保留规则估算损失价值（只读，不修改货舱）。用于 HUD 预估展示。
+        ///
+        /// 【聚合规则必须与 ApplyFractionalLoss 完全一致（DEV-011 fix）】：
+        /// 先按 def 聚合每种货物的总件数，再整体 keep = floor(total × keepRatio)，
+        /// 损失 = total - keep，价值 = Σ(损失件数 × def.value)。
+        /// 严禁逐堆 floor —— 否则同种矿跨多个 stack 时，估算损失会大于实际结算损失
+        /// （例：iron×1 分两堆、keepRatio=0.5：实际聚合 total=2→keep=1→损1；
+        ///   逐堆则每堆各损1 → 估算成损2，与 ApplyFractionalLoss 结算不一致）。
+        /// </summary>
         public int EstimatedLossValue(float keepRatio)
         {
             keepRatio = Mathf.Clamp01(keepRatio);
+
+            // 逐主槽累加，但每种 def 只在【首次出现】时按聚合总数一次性结算，避免重复计损。
+            var counted = new System.Collections.Generic.HashSet<TileDefinition>();
             int lossValue = 0;
             for (int i = 0; i < slots.Length; i++)
             {
                 var s = slots[i];
                 if (!s.isPrimary || s.IsEmpty) continue;
-                int loss = s.count - Mathf.FloorToInt(s.count * keepRatio);
+                if (!counted.Add(s.def)) continue;   // 该 def 已按聚合总数算过，跳过后续堆
+
+                // 聚合该 def 的全部主槽总件数（跨多个 stack）
+                int defTotal = 0;
+                for (int j = 0; j < slots.Length; j++)
+                {
+                    var s2 = slots[j];
+                    if (s2 != null && s2.isPrimary && s2.def == s.def && !s2.IsEmpty)
+                        defTotal += s2.count;
+                }
+
+                int loss = defTotal - Mathf.FloorToInt(defTotal * keepRatio);
                 lossValue += loss * s.def.value;
             }
             return lossValue;

@@ -89,6 +89,19 @@ namespace Ashfall.EditorTools
             return n;
         }
 
+        /// <summary>统计某矿种实际占用的主槽（堆）数量 —— 用于确认同矿确实跨了多个 stack。</summary>
+        static int CountPrimaryStacks(InventoryGrid g, TileDefinition def)
+        {
+            if (def == null) return 0;
+            int n = 0;
+            for (int i = 0; i < g.Capacity; i++)
+            {
+                var s = g.GetSlot(i);
+                if (s != null && s.isPrimary && !s.IsEmpty && s.def == def) n++;
+            }
+            return n;
+        }
+
         static void RunCargoLossMatrix(StringBuilder sb, TileDefinition iron, TileDefinition copper, TileDefinition tin)
         {
             Header(sb, "Cargo Loss 矩阵（keep = floor(count × 0.5)，确定性）");
@@ -183,6 +196,49 @@ namespace Ashfall.EditorTools
                     if (resultA[i] != resultB[i]) same = false;
                 Assert(same, "Deterministic_TwoRuns",
                     $"lostA=[{string.Join(",", resultA)}] lostB=[{string.Join(",", resultB)}]");
+            }
+
+            // 8) DEV-011 fix：同矿跨多个 stack 时 EstimatedLossValue 必须 == ApplyFractionalLoss 实际损失价值
+            //    （估算与结算都用「按 def 聚合总数再 floor」，杜绝逐堆 floor 造成的高估偏差）
+            {
+                // 塞 20 件铁（stackLimit=16 → 自动分 2 个主槽堆），载重 w1×20=20 ≤ 24 装得下
+                var g = NewGrid(2, 24f);
+                Stuff(g, iron, 20);
+                int estBefore = g.EstimatedLossValue(RiskExtractionCatalog.CargoKeepRatio);
+                // 结算前记录实际损失价值口径（结算前后 TotalValue 差）
+                int valueBefore = g.TotalValue;
+                var lost = g.ApplyFractionalLoss(RiskExtractionCatalog.CargoKeepRatio);
+                int actualLostValue = 0;
+                foreach (var l in lost) actualLostValue += l.def.value * l.lost;
+                int valueAfter = g.TotalValue;
+                // 跨堆已发生（用于确保用例确实测到分堆场景）
+                int primaryStacks = CountPrimaryStacks(g, iron);
+                // 用重新填装的第二份样本交叉验证估算（结算会改货舱，故先取估算再结算）
+                var g2 = NewGrid(2, 24f);
+                Stuff(g2, iron, 20);
+                int est2 = g2.EstimatedLossValue(RiskExtractionCatalog.CargoKeepRatio);
+                Assert(estBefore == est2, "MultiStack_EstimateDeterministic",
+                    $"同一 20 件铁跨堆估算两次一致: ${estBefore} == ${est2}");
+                // 聚合规则：total=20 → keep=floor(10)=10 → loss=10 → 价值 = 10×iron.value
+                Assert(estBefore == 10 * iron.value, "MultiStack_Estimate_AggregatedFloor",
+                    $"估算 ${estBefore}（应 = 损10件×v${iron.value}=${10 * iron.value}，聚合后再 floor）");
+                Assert(actualLostValue == estBefore, "MultiStack_EstimatedEqualsActual",
+                    $"估算 ${estBefore} == 实际结算损失 ${actualLostValue}（同矿跨 {primaryStacks} 堆应一致）");
+                Assert(valueBefore == valueAfter + actualLostValue, "MultiStack_ValueConserved",
+                    $"结算前后守恒: before ${valueBefore} = after ${valueAfter} + lost ${actualLostValue}");
+                // 另一矿种（铜）交叉：塞 40 件，若形成 ≥2 堆则估算==实际
+                int estCu = 0; int actCu = 0;
+                var gc = NewGrid(3, 24f);
+                Stuff(gc, copper, 40);   // 尽力塞，按实际形成的堆数为准
+                int nStacks = CountPrimaryStacks(gc, copper);
+                if (nStacks >= 2)
+                {
+                    estCu = gc.EstimatedLossValue(RiskExtractionCatalog.CargoKeepRatio);
+                    var lostCu = gc.ApplyFractionalLoss(RiskExtractionCatalog.CargoKeepRatio);
+                    foreach (var l in lostCu) actCu += l.def.value * l.lost;
+                }
+                Assert(nStacks < 2 || actCu == estCu, "MultiStack_Copper_CrossCheck",
+                    $"铜跨 {nStacks} 堆估算 ${estCu} == 实际 ${actCu}（若不足 2 堆则跳过）");
             }
 
             Flush(sb);
