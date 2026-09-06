@@ -46,6 +46,12 @@ namespace Ashfall
                  "为空 = 维持旧行为（含逐格 caveChance）。注：启用后若需要矿，请同时挂 OreVeinGenerator。")]
         public UndergroundSpaceGenerator undergroundSpaceGenerator;
 
+        [Header("DEV-013 小型遗迹（可选）")]
+        [Tooltip("非空时：在 Ore Vein pass 之后叠加遗迹 pass。生成顺序 = Base Strata → Space Pass → " +
+                 "Ore Vein Pass → Ruin Pass（遗迹后置覆盖矿脉落点，作为人工结构优先于天然矿脉）。" +
+                 "为空 = 维持旧行为，旧场景逐字节零回归。")]
+        public RuinGenerator ruinGenerator;
+
         TileDefinition[,] grid;
         Tile solidTile;
         Grid layoutGrid;
@@ -143,6 +149,8 @@ namespace Ashfall
             bool veinMode = oreVeinGenerator != null && oreVeinGenerator.isActiveAndEnabled;
             // DEV-008：启用探索空间时，禁用逐格 caveChance 椒盐打洞，天然 Empty 全部由 space pass 连贯生成
             bool spaceMode = undergroundSpaceGenerator != null && undergroundSpaceGenerator.isActiveAndEnabled;
+            // DEV-013：启用遗迹时，在 vein pass 之后叠加 ruin pass（后置覆盖落点）
+            bool ruinMode = ruinGenerator != null && ruinGenerator.isActiveAndEnabled;
 
             for (int y = 0; y < depth; y++)
             {
@@ -195,6 +203,11 @@ namespace Ashfall
             // DEV-007：基础地层完成后执行矿脉 pass（可选；在耐久初始化后、整图刷新前）
             if (veinMode)
                 oreVeinGenerator.ApplyToGrid(this);
+
+            // DEV-013：遗迹 pass（可选；在矿脉 pass 之后、整图刷新前。遗迹人工结构后置覆盖落点，
+            // 与矿脉/洞穴不互相覆盖竞争 —— 明确顺序由本方法集中定义）。
+            if (ruinMode)
+                ruinGenerator.ApplyToGrid(this);
 
             RefreshAll();
         }

@@ -24,7 +24,8 @@ namespace Ashfall
         EfficientMotor,        // 节能电机：降低移动/悬停 Fuel 消耗（不改变采矿范围）
         ReinforcedCargoRack,   // 强化货架：增加 CargoCapacity（不自动出售）
         DrillCooling,          // 钻头冷却：提升单格连续挖掘效率（不减命中格数）
-        SurveySensor           // 勘探传感器：小幅扩大 Scanner 半径（Scanner 仍只读）
+        SurveySensor,          // 勘探传感器：小幅扩大 Scanner 半径（Scanner 仍只读）
+        RuinAccessKey          // DEV-013 遗迹密钥：提供 RuinAccess 能力（打开 RuinSeal / 进入遗迹）
     }
 
     /// <summary>
@@ -129,6 +130,7 @@ namespace Ashfall
                 case EquipmentModule.ReinforcedCargoRack: return 150;
                 case EquipmentModule.DrillCooling:        return 140;
                 case EquipmentModule.SurveySensor:        return 90;
+                case EquipmentModule.RuinAccessKey:       return 120;
                 default: return 9999;
             }
         }
@@ -141,6 +143,7 @@ namespace Ashfall
                 case EquipmentModule.ReinforcedCargoRack: return "强化货架";
                 case EquipmentModule.DrillCooling:        return "钻头冷却";
                 case EquipmentModule.SurveySensor:        return "勘探传感器";
+                case EquipmentModule.RuinAccessKey:       return "遗迹密钥";
                 default: return m.ToString();
             }
         }

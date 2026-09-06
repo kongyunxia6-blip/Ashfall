@@ -28,7 +28,11 @@ namespace Ashfall
         SupportCollapse = 1 << 0,
         /// <summary>高温过热：挖穿/触碰时按 Cooling 能力产生过热锁定反馈（HotRockSystem）。</summary>
         OverheatLock = 1 << 1,
-        // 预留：ResonancePulse / ConductArc / SealBreak —— 本 DEV 不实现。
+        /// <summary>DEV-013 封印破拆：由 RuinSealSystem 按 RuinAccess 能力门控入口封印（无权限拒挖反馈）。</summary>
+        SealBreak = 1 << 2,
+        /// <summary>DEV-013 中继交互：点击命中 AncientRelayCore 触发一次性调查/奖励（AncientRelayCoreSystem）。</summary>
+        RelayInteract = 1 << 3,
+        // 预留：ResonancePulse / ConductArc —— 本 DEV 不实现。
     }
 
     /// <summary>
@@ -68,14 +72,18 @@ namespace Ashfall
     }
 
     /// <summary>
-    /// DEV-012：特殊块元数据唯一集中登记处。
+    /// DEV-012/DEV-013：特殊块元数据唯一集中登记处。
     /// 首批：SupportRock（复用 BlockCollapseSystem，禁止重写）+ HotRock（新实现）。
-    /// 预留：ResonanceCrystal / ConductiveOre / RuinSeal（仅登记占位 stable id，不实现）。
+    /// DEV-013 追加：RuinSeal（入口封印，RuinSealSystem）+ AncientRelayCore（中继交互点）。
+    /// 预留：ResonanceCrystal / ConductiveOre（仅登记占位 stable id，不实现）。
     /// </summary>
     public static class SpecialBlockCatalog
     {
         public const string SupportRock = "SupportRock";
         public const string HotRock = "HotRock";
+
+        // ---- DEV-013：遗迹系统已实现 ----
+        public const string AncientRelayCore = "AncientRelayCore";
 
         // ---- 预留（不实现，仅保证架构可表达） ----
         public const string ResonanceCrystal = "ResonanceCrystal";
@@ -105,8 +113,34 @@ namespace Ashfall
                 runtimeOwner = "HotRockSystem",
             };
 
+        /// <summary>DEV-013：遗迹入口封印。无 RuinAccess → 明确拒挖反馈；有 → 单格打开入口。非 invisible wall。</summary>
+        public static readonly SpecialBlockDefinition Seal =
+            new SpecialBlockDefinition
+            {
+                specialBlockId = RuinSeal,
+                displayName = "遗迹封印",
+                category = SpecialBlockCategory.Seal,
+                requiredCapability = MiningCapability.RuinAccess,
+                capabilityForStable = MiningCapability.RuinAccess,
+                reactionHook = SpecialReactionHook.SealBreak,
+                shortDescription = "遗迹入口的能力门：无 RuinAccess 拒挖并给明确反馈；有 RuinAccess 后经单格挖掘管线打开（RuinSealSystem）。",
+                runtimeOwner = "RuinSealSystem",
+            };
+
+        /// <summary>DEV-013：古代中继核心。房间内交互点：点击命中触发一次性调查与奖励（不崩碎消失）。</summary>
+        public static readonly SpecialBlockDefinition RelayCore =
+            new SpecialBlockDefinition
+            {
+                specialBlockId = AncientRelayCore,
+                displayName = "古代中继核心",
+                category = SpecialBlockCategory.Resource,
+                reactionHook = SpecialReactionHook.RelayInteract,
+                shortDescription = "遗迹核心：首次交互给 AncientDataFragment/AncientAlloy 并标记 investigated；二次仅提示。",
+                runtimeOwner = "AncientRelayCoreSystem",
+            };
+
         public static readonly SpecialBlockDefinition[] All =
-            { Support, Hot };
+            { Support, Hot, Seal, RelayCore };
 
         public static SpecialBlockDefinition Find(string id)
         {
@@ -127,6 +161,8 @@ namespace Ashfall
             {
                 case BlockType.SupportRock: return Support;
                 case BlockType.HotRock: return Hot;
+                case BlockType.RuinSeal: return Seal;
+                case BlockType.AncientRelayCore: return RelayCore;
                 default: return null;
             }
         }

@@ -3,10 +3,12 @@ using UnityEngine;
 namespace Ashfall
 {
     /// <summary>
-    /// DEV-004/DEV-012：Block 通用行为类型标记（不硬编码进矿物名）。
-    /// Normal / SupportRock / LooseRock 由 DEV-004 引入；HotRock 由 DEV-012 追加（高温岩）。
+    /// DEV-004/DEV-012/DEV-013：Block 通用行为类型标记（不硬编码进矿物名）。
+    /// Normal / SupportRock / LooseRock 由 DEV-004 引入；HotRock 由 DEV-012 追加（高温岩）；
+    /// RuinSeal / AncientRelayCore 由 DEV-013 追加（遗迹入口封印 / 中继核心交互点）。
     /// 本枚举只做「一格属于哪类行为」的标记，不放采矿行为分支；
-    /// 具体反应由对应运行时系统（BlockCollapseSystem→SupportRock，HotRockSystem→HotRock）经
+    /// 具体反应由对应运行时系统（BlockCollapseSystem→SupportRock，HotRockSystem→HotRock，
+    /// RuinSealSystem→RuinSeal，AncientRelayCoreSystem→AncientRelayCore）经
     /// SpecialBlockCatalog 元数据 + MiningCapabilityResolver 消费，DigGrid 不做 switch(specialType)。
     /// </summary>
     public enum BlockType
@@ -15,6 +17,8 @@ namespace Ashfall
         SupportRock = 1,   // 承重岩：被真正移除后触发上方 LooseRock 坍塌检查
         LooseRock = 2,     // 松散岩：正常静止；下方关键支撑被移除后 Unstable → 坍塌
         HotRock = 3,       // 高温岩（DEV-012）：无冷却挖掘受明显惩罚/短暂过热锁定；有冷却稳定处理
+        RuinSeal = 4,      // 遗迹封印（DEV-013）：无 RuinAccess 时明确拒挖反馈；有 RuinAccess 才可单格打开入口
+        AncientRelayCore = 5, // 古代中继核心（DEV-013）：遗迹内交互点，点击命中触发一次性调查与奖励
     }
 
     /// <summary>

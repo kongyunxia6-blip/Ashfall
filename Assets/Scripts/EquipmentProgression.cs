@@ -33,7 +33,7 @@ namespace Ashfall
         // ---------- 模块状态 ----------
         [Header("模块（拥有 + 已装备）")]
         [Tooltip("已购买（解锁）的模块。同模块只能拥有一次。")]
-        public bool[] ownedModules = new bool[4];        // 索引 = (int)EquipmentModule
+        public bool[] ownedModules = new bool[5];        // 索引 = (int)EquipmentModule（DEV-013 扩到 5：新增 RuinAccessKey）
         [Tooltip("当前已装备的模块（长度 = 槽位上限 2；null 位 = 空槽）。")]
         public EquipmentModule?[] equipped = new EquipmentModule?[2];
 

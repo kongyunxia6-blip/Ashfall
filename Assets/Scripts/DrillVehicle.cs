@@ -14,6 +14,8 @@ namespace Ashfall
         NotSolid,      // 目标不是可挖实心格（含崩碎中、被移走）
         HardnessLow,   // 钻头等级不足
         Overheated,    // DEV-012：HotRock 无冷却且钻头过热锁定中（本次未命中，单格不变）
+        Sealed,        // DEV-013：RuinSeal 无 RuinAccess 被拒（本次未命中，单格不变，入口未打开）
+        Interacted,    // DEV-013：命中 AncientRelayCore 触发交互（不 HitBlock，装置不消失）
         Hit,           // 命中，耐久 -1，未崩碎
         Broken         // 命中并使其进入崩碎
     }
@@ -185,6 +187,18 @@ namespace Ashfall
         HotRockSystem hotRock;
 
         /// <summary>
+        /// DEV-013：遗迹封印系统（可空）。存在时，命中 RuinSeal 前经它做 RuinAccess 能力门控
+        /// （无权限拒挖反馈，不命中；有权限放行 HitBlock 单格打开入口）。经 MiningCapabilityResolver。
+        /// </summary>
+        RuinSealSystem ruinSeal;
+
+        /// <summary>
+        /// DEV-013：中继核心系统（可空）。存在时，命中 AncientRelayCore 转交它做一次性调查/奖励
+        /// （不 HitBlock，装置不消失）。空 → 按普通块处理（零回归）。
+        /// </summary>
+        AncientRelayCoreSystem relayCore;
+
+        /// <summary>
         /// 格子背包：存每格的【种类 + 数量】，而不是只存总价值。
         /// 存明细才能按种类丢弃、显示清单、让 M4 残骸有落脚点。
         /// 容量由「格数 + 载重上限」双重约束，见 InventoryGrid 类注释。
@@ -221,6 +235,11 @@ namespace Ashfall
             // DEV-012：HotRock 反应系统（可空；同物体优先，否则场景内查找）。
             if (hotRock == null) hotRock = GetComponent<HotRockSystem>();
             if (hotRock == null) hotRock = FindFirstObjectByType<HotRockSystem>();
+            // DEV-013：遗迹封印 / 中继核心系统（可空；同物体优先，否则场景内查找）。
+            if (ruinSeal == null) ruinSeal = GetComponent<RuinSealSystem>();
+            if (ruinSeal == null) ruinSeal = FindFirstObjectByType<RuinSealSystem>();
+            if (relayCore == null) relayCore = GetComponent<AncientRelayCoreSystem>();
+            if (relayCore == null) relayCore = FindFirstObjectByType<AncientRelayCoreSystem>();
             ApplyUpgradeStats();
             FullRestore();
 
@@ -644,6 +663,18 @@ namespace Ashfall
             if (tdef == null || !tdef.isSolid || grid.IsBreaking(cell.x, cell.y))
                 return DigHitResult.NotSolid;
 
+            // DEV-013：一次 classify 供后续 core / seal / hotrock 门控复用（唯一 blockType→元数据映射）。
+            var special = SpecialBlockCatalog.Classify(tdef);
+
+            // DEV-013：AncientRelayCore 交互（装置点，放在硬度门控之前 —— core 无硬度语义，不是普通挖掘）。
+            // 命中 core → 转交 relayCore 做一次性调查/奖励；不 HitBlock、不崩碎、不消失。
+            if (special != null && (special.reactionHook & SpecialReactionHook.RelayInteract) != 0)
+            {
+                if (relayCore != null && relayCore.TryRelayInteract(cell, this))
+                    return DigHitResult.Interacted;
+                // 无中继系统 → 落回普通块（零回归安全兜底）
+            }
+
             int drillLevel = upgrades != null ? upgrades.DrillLevel : 1;
             // DEV-010：装备成长模式没有额外硬度门槛语义（各 tile 仍按原 hardness 判定，
             // 测试场景 tile hardness=1 → Lv 恒通过）。永不改变「一次命中 1 Block」规则。
@@ -658,7 +689,6 @@ namespace Ashfall
             // 需要 OverheatLock 反应的特殊块」，再交给 HotRockSystem + MiningCapabilityResolver
             // 判定（无冷却 → 累积热量 → 过热锁定；有冷却 → 稳定）。锁定拒绝时【不命中】
             // 且单格不变。此处不写 if(blockType==HotRock)，未来同类特殊块经 Catalog 元数据自动接入。
-            var special = SpecialBlockCatalog.Classify(tdef);
             if (special != null && (special.reactionHook & SpecialReactionHook.OverheatLock) != 0 && hotRock != null)
             {
                 bool cooling = MiningCapabilityResolver.HasCapability(MiningCapability.Cooling);
@@ -668,6 +698,20 @@ namespace Ashfall
                     ResetDig();
                     ShowMessageThrottled("钻头过热锁定中，无法继续开采高温岩！", 0.6f);
                     return DigHitResult.Overheated;
+                }
+            }
+
+            // DEV-013：RuinSeal 能力门控。命中封印前经 RuinSealSystem + MiningCapabilityResolver 判定
+            // RuinAccess（无权限 → 明确拒挖反馈，【不命中】入口不打开；有权限 → 放行下方 HitBlock 单格）。
+            if (special != null && (special.reactionHook & SpecialReactionHook.SealBreak) != 0 && ruinSeal != null)
+            {
+                bool access = MiningCapabilityResolver.HasCapability(MiningCapability.RuinAccess);
+                bool allowed = ruinSeal.AllowOpenSeal(access);
+                if (!allowed)
+                {
+                    ResetDig();
+                    ShowMessageThrottled(ruinSeal.LastRejectReason, 0.6f);
+                    return DigHitResult.Sealed;
                 }
             }
 
