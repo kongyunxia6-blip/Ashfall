@@ -25,8 +25,10 @@ namespace Ashfall.EditorTools
             int pass = 0, fail = 0;
 
             B_StratumMatrix(sb, ref pass, ref fail);
+            StratumDepthData(sb, ref pass, ref fail);
             C_HardnessMatrix(sb, ref pass, ref fail);
             D_OreStratumMatrix(sb, ref pass, ref fail);
+            OreFullRegistration(sb, ref pass, ref fail);
             G_CapabilityMatrix(sb, ref pass, ref fail);
             E_SupportReuseAudit(sb, ref pass, ref fail);
 
@@ -75,10 +77,17 @@ namespace Ashfall.EditorTools
             Assert(StratumCatalog.Find("AnomalousRuinLayer") != null, "B_StableId_Anomalous",
                 "AnomalousRuinLayer stableId 登记（DEV-013 复用点）", sb, ref pass, ref fail);
 
-            // Region 与 Stratum 是两个独立概念：Region 边界来自 DepthRegionLayout，Stratum 只做推荐映射
-            bool regionIndependent = DepthRegionLayout.Mid.maxDepth == 43 && StratumCatalog.Dense.longTermMaxDepth == 0;
+            // Region 与 Stratum 是两个独立概念：Region 边界来自 DepthRegionLayout（运行时 CurrentDepth/MaxDepth），
+            // Stratum 只表达地质/深度规范 + 推荐映射。修正：不再假设「Stratum 无深度字段」（阻塞项1 已给深度赋值），
+            // 改为验证 StratumDefinition 类型不含 Region/CurrentDepth 耦合字段——即 Region 不写进 Stratum、Stratum 不持有 Region。
+            bool regionIndependent = DepthRegionLayout.Mid.maxDepth == 43
+                && typeof(StratumDefinition).GetField("regionId",
+                    System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance) == null
+                && typeof(StratumDefinition).GetField("currentDepth",
+                    System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance) == null;
             Assert(regionIndependent, "B_RegionVsStratum_Independent",
-                "Region(Mid 22..43) 边界独立于 Stratum(Dense 无 region 字段)——两概念未耦合", sb, ref pass, ref fail);
+                "Region(Mid 22..43) 独立于 Stratum(Dense 深度 250..450 为长期地质数据，非 Region 字段)——Stratum 无 regionId/currentDepth 耦合字段",
+                sb, ref pass, ref fail);
 
             // 六级长期地层全部登记
             int longTermCount = 0;
@@ -88,6 +97,58 @@ namespace Ashfall.EditorTools
             // 不修改 Region 的 MaxDepth/first-enter 语义：本系统不触碰 DepthRegionProgression 字段（编译期无该耦合即保证）
             Assert(true, "B_NoDepthMutation_CompileGuard",
                 "Stratum 层不引用/不修改 DepthRegionProgression 运行字段（纯数据登记）", sb, ref pass, ref fail);
+        }
+
+        // ---------- Stratum 长期深度正式数据（阻塞项 1：深度必须可查询，非注释） ----------
+        static void StratumDepthData(StringBuilder sb, ref int pass, ref int fail)
+        {
+            sb.AppendLine("\n==== Stratum 长期深度正式数据（阻塞项1） ====");
+
+            // 六个 Catalog 实例的 longTermMin/Max 全部已赋值（非默认 0）
+            bool allAssigned = true; string detail = "";
+            foreach (var s in StratumCatalog.All)
+                if (s.longTermMaxDepth == 0 && s.stableId != StratumCatalog.AnomalousRuinLayer)
+                { allAssigned = false; detail += $" {s.stableId}"; }
+            Assert(allAssigned, "S_Depth_AllAssigned",
+                "六层 longTermMinDepth/MaxDepth 均已赋正式边界（AnomalousRuinLayer 用 OpenTopDepth 开放上界）" + detail,
+                sb, ref pass, ref fail);
+
+            // 排序后区间合法：min<=max，且相邻层无缝衔接（上界==下一层下界），最深层开放上界
+            Assert(StratumCatalog.IsDepthDataContiguous(), "S_Depth_ContiguousMonotonic",
+                "六层边界单调、无缝衔接、无重叠；最深层（AnomalousRuinLayer）开放上界",
+                sb, ref pass, ref fail);
+
+            // 逐层期望边界
+            var expect = new (string id, int min, int max)[]
+            {
+                (StratumCatalog.SoilRubble,       0,    100),
+                (StratumCatalog.NormalRock,       100,  250),
+                (StratumCatalog.DenseRock,        250,  450),
+                (StratumCatalog.GraniteBasalt,    450,  700),
+                (StratumCatalog.CrystallizedRock, 700,  1000),
+                (StratumCatalog.AnomalousRuinLayer, 1000, StratumCatalog.OpenTopDepth),
+            };
+            bool boundsOk = true; string bDetail = "";
+            foreach (var (id, mn, mx) in expect)
+            {
+                var s = StratumCatalog.Find(id);
+                if (s == null || s.longTermMinDepth != mn || s.longTermMaxDepth != mx)
+                { boundsOk = false; bDetail += $" {id}=({(s == null ? "?" : s.longTermMinDepth + ".." + s.longTermMaxDepth)})"; }
+            }
+            Assert(boundsOk, "S_Depth_ExpectedBounds",
+                "0–100/100–250/250–450/450–700/700–1000/1000m+ 正式边界登记正确" + bDetail,
+                sb, ref pass, ref fail);
+
+            // 深→地层查询：代表性深度落入正确层（左闭右开）
+            bool qOk = StratumCatalog.ForDepth(50) == StratumCatalog.Soil
+                       && StratumCatalog.ForDepth(180) == StratumCatalog.Normal
+                       && StratumCatalog.ForDepth(320) == StratumCatalog.Dense
+                       && StratumCatalog.ForDepth(600) == StratumCatalog.Granite
+                       && StratumCatalog.ForDepth(850) == StratumCatalog.Crystallized
+                       && StratumCatalog.ForDepth(1500) == StratumCatalog.AnomalousRuin;
+            Assert(qOk, "S_Depth_ForDepthQuery",
+                "ForDepth 按深度落入正确地层（50→Soil/180→Normal/320→Dense/600→Granite/850→Crystallized/1500→AnomalousRuin）",
+                sb, ref pass, ref fail);
         }
 
         // ---------- C. Hardness / Capability 矩阵（编辑模式逻辑层） ----------
@@ -116,9 +177,18 @@ namespace Ashfall.EditorTools
             Assert(SpecialBlockCatalog.Hot.reactionHook == SpecialReactionHook.OverheatLock,
                 "C_HotRock_OverheatHook", "HotRock 反应钩子 = OverheatLock", sb, ref pass, ref fail);
 
-            // Resolver：HotRock 只查 capability，不内联模块枚举
-            Assert(HotRockSystem.UsesCapabilityResolverOnly(), "C_HotRock_NoModuleInline",
-                "HotRockSystem 经 MiningCapabilityResolver.HasCapability(Cooling)，无内联模块枚举", sb, ref pass, ref fail);
+            // 建议B修复：不再用恒 true 自证；改为可测的依赖形状断言——
+            // HotRockSystem.AllowDigHit(bool) 消费「调用方注入」的冷却能力（不自查 EquipmentModule，
+            // 不自建 GameManager 查询），能力唯一来源 = DrillVehicle 经 MiningCapabilityResolver 注入。
+            // 真实运行行为（无/有冷却 A-B）由播放探针 F 组覆盖，此处约束其 API 不自查模块。
+            var allowMethod = typeof(HotRockSystem).GetMethod("AllowDigHit",
+                System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+            bool hotSigOk = allowMethod != null
+                && allowMethod.GetParameters().Length == 1
+                && allowMethod.GetParameters()[0].ParameterType == typeof(bool);
+            Assert(hotSigOk, "C_HotRock_DependsOnInjectedCooling",
+                "HotRockSystem.AllowDigHit(bool) 只消费注入的冷却布尔，无模块自查询字段/方法（能力来源=resolver）",
+                sb, ref pass, ref fail);
         }
 
         // ---------- D. Ore × Stratum 关系 ----------
@@ -149,6 +219,53 @@ namespace Ashfall.EditorTools
             // 固定 seed 确定性：OreCatalog/StratumCatalog 均为无随机静态表（确定性来自固定 seed 的 OreVeinGenerator，播放侧复验）
             Assert(true, "D_Deterministic_Static",
                 "Stratum/Ore/SpecialBlock Catalog 均为确定性静态数据，不引入随机源", sb, ref pass, ref fail);
+        }
+
+        // ---------- Ore 完整规划登记（阻塞项 2：架构能表达完整矿种，即使只启用代表矿） ----------
+        static void OreFullRegistration(StringBuilder sb, ref int pass, ref int fail)
+        {
+            sb.AppendLine("\n==== Ore 完整规划登记（阻塞项2） ====");
+
+            // Issue §6 完整规划矿种（stable ore id）——登记层必须能表达全部，即使 tile 未启用
+            string[] planned = {
+                "coal_ore", "copper_ore", "iron_ore", "tin_ore",
+                "lead_ore", "silver_ore", "gold_ore", "platinum_ore",
+                "amethyst", "ruby", "sapphire", "emerald", "diamond",
+                "uranium_ore", "energy_crystal", "ancient_alloy",
+                "anomalous_crystal", "unknown_mineral",
+            };
+            int missing = 0; string missingIds = "";
+            for (int i = 0; i < planned.Length; i++)
+            {
+                bool found = false;
+                foreach (var id in OreCatalog.RegisteredOreIds)
+                    if (id == planned[i]) { found = true; break; }
+                if (!found) { missing++; missingIds += " " + planned[i]; }
+            }
+            Assert(missing == 0, "O_Full_AllPlannedRegistered",
+                $"18 种规划矿种全部登记（缺 {missing}）{missingIds}", sb, ref pass, ref fail);
+
+            // 每种都登记了 displayName + allowedStrata（非空）
+            bool metaOk = true; string mDetail = "";
+            foreach (var o in OreCatalog.GetRegisteredSnapshot())
+                if (string.IsNullOrEmpty(o.displayName) || o.allowedStrata == null || o.allowedStrata.Length == 0)
+                { metaOk = false; mDetail += " " + o.oreId; }
+            Assert(metaOk, "O_Full_MetadataPresent",
+                "每种矿均有 displayName 与 allowedStrata（可跨地层权重）" + mDetail, sb, ref pass, ref fail);
+
+            // oreId 唯一（无重复登记）
+            var ids = OreCatalog.RegisteredOreIds;
+            bool unique = true;
+            for (int i = 0; i < ids.Length && unique; i++)
+                for (int j = i + 1; j < ids.Length; j++)
+                    if (ids[i] == ids[j]) { unique = false; break; }
+            Assert(unique, "O_Full_NoDuplicate", $"oreId 唯一（共登记 {ids.Length} 种）", sb, ref pass, ref fail);
+
+            // 更深层贵矿只登记允许出现的深地层（抽样：钻石/铀 不得出现在 Soil/Normal）
+            Assert(!OreCatalog.AllowedInStratum(OreCatalog.Diamond, StratumCatalog.SoilRubble)
+                   && !OreCatalog.AllowedInStratum(OreCatalog.Diamond, StratumCatalog.NormalRock)
+                   && !OreCatalog.AllowedInStratum(OreCatalog.UraniumOre, StratumCatalog.NormalRock),
+                "O_Deep_NotInShallow", "钻石/铀不登记到浅层地层（仅深地层），语义正确", sb, ref pass, ref fail);
         }
 
         // ---------- G. Capability Resolver 语义 ----------

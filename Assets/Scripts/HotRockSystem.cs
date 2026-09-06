@@ -109,8 +109,5 @@ namespace Ashfall
             IsOverheated = false;
             LastVerdict = "reset";
         }
-
-        /// <summary>校验：代码是否走 capability 而非硬编码模块（供回归断言，恒 true，语义防回归）。</summary>
-        public static bool UsesCapabilityResolverOnly() => true;
     }
 }

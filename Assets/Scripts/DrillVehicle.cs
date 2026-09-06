@@ -654,10 +654,12 @@ namespace Ashfall
                 return DigHitResult.HardnessLow;
             }
 
-            // DEV-012：HotRock 能力门控。命中前经 HotRockSystem + MiningCapabilityResolver
+            // DEV-012：HotRock 能力门控。命中前经 SpecialBlockCatalog.Classify 判定「这是不是
+            // 需要 OverheatLock 反应的特殊块」，再交给 HotRockSystem + MiningCapabilityResolver
             // 判定（无冷却 → 累积热量 → 过热锁定；有冷却 → 稳定）。锁定拒绝时【不命中】
-            // 且单格不变。此处只判断「这一格是不是 HotRock」，不 switch 其它特殊块类型。
-            if (tdef.blockType == BlockType.HotRock && hotRock != null)
+            // 且单格不变。此处不写 if(blockType==HotRock)，未来同类特殊块经 Catalog 元数据自动接入。
+            var special = SpecialBlockCatalog.Classify(tdef);
+            if (special != null && (special.reactionHook & SpecialReactionHook.OverheatLock) != 0 && hotRock != null)
             {
                 bool cooling = MiningCapabilityResolver.HasCapability(MiningCapability.Cooling);
                 bool allowed = hotRock.AllowDigHit(cooling);
