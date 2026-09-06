@@ -30,12 +30,14 @@ namespace Ashfall
             return (HardnessTier)tier;
         }
 
-        /// <summary>统一能力查询。V1 支持 Cooling；其余恒 false（预留）。</summary>
+        /// <summary>统一能力查询。V1 支持 Cooling + RuinAccess；其余恒 false（预留）。</summary>
         public static bool HasCapability(MiningCapability capability)
         {
             if ((capability & MiningCapability.Cooling) != 0)
                 return HasCooling();
-            // Resonance / Conductive / RuinAccess：V1 无 provider，恒 false（预留扩展）。
+            if ((capability & MiningCapability.RuinAccess) != 0)
+                return HasRuinAccess();
+            // Resonance / Conductive：V1 无 provider，恒 false（预留扩展）。
             return false;
         }
 
@@ -45,6 +47,17 @@ namespace Ashfall
             var gm = GameManager.Instance;
             if (gm == null || gm.Equipment == null) return false;
             return gm.Equipment.IsEquipped(EquipmentModule.DrillCooling);
+        }
+
+        /// <summary>
+        /// DEV-013 遗迹访问能力：是否已装备 RuinAccessKey（V1 唯一 provider）。
+        /// RuinSeal / 遗迹系统只经本层查询，禁止直接查具体模块 enum。
+        /// </summary>
+        public static bool HasRuinAccess()
+        {
+            var gm = GameManager.Instance;
+            if (gm == null || gm.Equipment == null) return false;
+            return gm.Equipment.IsEquipped(EquipmentModule.RuinAccessKey);
         }
 
         /// <summary>
