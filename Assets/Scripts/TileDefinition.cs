@@ -3,15 +3,18 @@ using UnityEngine;
 namespace Ashfall
 {
     /// <summary>
-    /// DEV-004：Block 通用行为类型标记（不硬编码进矿物名）。
-    /// V1 仅实现 Normal / SupportRock / LooseRock；后续特殊 Block
-    /// （Explosive / Hot / Resonance / Conductive / RuinSeal…）在枚举扩展，本 PR 不实现。
+    /// DEV-004/DEV-012：Block 通用行为类型标记（不硬编码进矿物名）。
+    /// Normal / SupportRock / LooseRock 由 DEV-004 引入；HotRock 由 DEV-012 追加（高温岩）。
+    /// 本枚举只做「一格属于哪类行为」的标记，不放采矿行为分支；
+    /// 具体反应由对应运行时系统（BlockCollapseSystem→SupportRock，HotRockSystem→HotRock）经
+    /// SpecialBlockCatalog 元数据 + MiningCapabilityResolver 消费，DigGrid 不做 switch(specialType)。
     /// </summary>
     public enum BlockType
     {
         Normal = 0,        // 常规方块，无环境行为
         SupportRock = 1,   // 承重岩：被真正移除后触发上方 LooseRock 坍塌检查
         LooseRock = 2,     // 松散岩：正常静止；下方关键支撑被移除后 Unstable → 坍塌
+        HotRock = 3,       // 高温岩（DEV-012）：无冷却挖掘受明显惩罚/短暂过热锁定；有冷却稳定处理
     }
 
     /// <summary>

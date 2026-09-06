@@ -13,6 +13,7 @@ namespace Ashfall
     {
         NotSolid,      // 目标不是可挖实心格（含崩碎中、被移走）
         HardnessLow,   // 钻头等级不足
+        Overheated,    // DEV-012：HotRock 无冷却且钻头过热锁定中（本次未命中，单格不变）
         Hit,           // 命中，耐久 -1，未崩碎
         Broken         // 命中并使其进入崩碎
     }
@@ -178,6 +179,12 @@ namespace Ashfall
         MiningFeelController miningFeel;
 
         /// <summary>
+        /// DEV-012：HotRock 高温岩反应系统（可空）。存在时，命中 HotRock 前经它做能力门控
+        /// （无冷却 → 累积热量 → 过热锁定）。经 MiningCapabilityResolver，禁止内联模块枚举。
+        /// </summary>
+        HotRockSystem hotRock;
+
+        /// <summary>
         /// 格子背包：存每格的【种类 + 数量】，而不是只存总价值。
         /// 存明细才能按种类丢弃、显示清单、让 M4 残骸有落脚点。
         /// 容量由「格数 + 载重上限」双重约束，见 InventoryGrid 类注释。
@@ -211,6 +218,9 @@ namespace Ashfall
             var gm = GameManager.Instance;
             upgrades = gm != null ? gm.Upgrades : null;
             equipment = gm != null ? gm.Equipment : null;
+            // DEV-012：HotRock 反应系统（可空；同物体优先，否则场景内查找）。
+            if (hotRock == null) hotRock = GetComponent<HotRockSystem>();
+            if (hotRock == null) hotRock = FindFirstObjectByType<HotRockSystem>();
             ApplyUpgradeStats();
             FullRestore();
 
@@ -642,6 +652,23 @@ namespace Ashfall
                 ResetDig();
                 ShowMessageThrottled($"钻头不足：需要 Lv{tdef.hardness}（当前 Lv{drillLevel}）", 0.5f);
                 return DigHitResult.HardnessLow;
+            }
+
+            // DEV-012：HotRock 能力门控。命中前经 SpecialBlockCatalog.Classify 判定「这是不是
+            // 需要 OverheatLock 反应的特殊块」，再交给 HotRockSystem + MiningCapabilityResolver
+            // 判定（无冷却 → 累积热量 → 过热锁定；有冷却 → 稳定）。锁定拒绝时【不命中】
+            // 且单格不变。此处不写 if(blockType==HotRock)，未来同类特殊块经 Catalog 元数据自动接入。
+            var special = SpecialBlockCatalog.Classify(tdef);
+            if (special != null && (special.reactionHook & SpecialReactionHook.OverheatLock) != 0 && hotRock != null)
+            {
+                bool cooling = MiningCapabilityResolver.HasCapability(MiningCapability.Cooling);
+                bool allowed = hotRock.AllowDigHit(cooling);
+                if (!allowed)
+                {
+                    ResetDig();
+                    ShowMessageThrottled("钻头过热锁定中，无法继续开采高温岩！", 0.6f);
+                    return DigHitResult.Overheated;
+                }
             }
 
             // DEV-001：耐久由 DigGrid 承载。每次命中 = 调 HitBlock 一次。
