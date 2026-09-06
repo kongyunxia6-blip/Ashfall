@@ -37,6 +37,47 @@ namespace Ashfall
         [Tooltip("当前已装备的模块（长度 = 槽位上限 2；null 位 = 空槽）。")]
         public EquipmentModule?[] equipped = new EquipmentModule?[2];
 
+        /// <summary>当前 EquipmentModule 枚举成员总数（ownedModules 目标长度）。</summary>
+        static int ModuleCount => System.Enum.GetValues(typeof(EquipmentModule)).Length;
+
+        void Awake()
+        {
+            EnsureModuleStorage();
+        }
+
+#if UNITY_EDITOR
+        void OnValidate()
+        {
+            EnsureModuleStorage();
+        }
+#endif
+
+        /// <summary>
+        /// Blocker2 修复：Unity 旧场景序列化兼容自愈。
+        /// DEV-013 把 EquipmentModule 扩到 5（新增 RuinAccessKey）。已保存的 DEV-010/011 场景里
+        /// ownedModules 是【长度 4】的序列化数组 —— 仅改字段初始化器 new bool[5] 不会让旧数组自动扩容，
+        /// 而 RuinAccessKey 的索引是 4，直接写 ownedModules[4] 会越界。
+        /// 这里把 ownedModules 就地扩到当前 enum 数量（保留下标 0..oldLen-1 的旧状态，新增位置 false），
+        /// 保证旧场景与新代码都安全；装备数组 equipped 只随槽位逻辑用，不在此扩容。
+        /// </summary>
+        public void EnsureModuleStorage()
+        {
+            int need = Mathf.Max(1, ModuleCount);
+            if (ownedModules != null && ownedModules.Length == need) return;
+
+            var old = ownedModules;
+            ownedModules = new bool[need];
+            int oldLen = 0;
+            if (old != null)
+            {
+                oldLen = old.Length;
+                int copy = Mathf.Min(old.Length, need);
+                for (int i = 0; i < copy; i++) ownedModules[i] = old[i];
+            }
+            // 新增位默认 false（未拥有），符合"旧 4 模块状态保留 + 新模块未拥有"。
+            Debug.Log($"[EquipmentProgression] ownedModules 迁移 {oldLen} → {need}（保留旧模块状态，防 RuinAccessKey 越界）");
+        }
+
         // ---------- 事件 ----------
         /// <summary>任意装备变化（升级 / 购买 / 装卸）后触发。HUD/DrillVehicle 用它即时刷新。</summary>
         public event Action OnStatsChanged;
@@ -62,7 +103,11 @@ namespace Ashfall
         public int SlotCount => EquipmentCatalog.SlotCount(drillLevel, fuelTankLevel, cargoHoldLevel, mobilityLevel);
         public int OwnedCount => CountOwned();
         public int EquippedCount => CountEquipped();
-        public bool IsOwned(EquipmentModule m) => ownedModules[(int)m];
+        public bool IsOwned(EquipmentModule m)
+        {
+            int i = (int)m;
+            return ownedModules != null && i >= 0 && i < ownedModules.Length && ownedModules[i];
+        }
         public bool IsEquipped(EquipmentModule m)
         {
             for (int i = 0; i < equipped.Length; i++)
@@ -161,6 +206,7 @@ namespace Ashfall
                 return (false, $"现金不足：购买 {EquipmentCatalog.ModuleDisplayName(m)} 需要 ${cost}");
 
             gm.SpendCash(cost);
+            EnsureModuleStorage();              // Blocker2：确保索引不越界（迁移自愈兜底）
             ownedModules[(int)m] = true;
             NotifyChanged();
             Debug.Log($"[EquipmentProgression] 购买模块 {EquipmentCatalog.ModuleDisplayName(m)}（${cost}），现金 ${gm.Cash}");

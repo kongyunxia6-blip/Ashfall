@@ -60,33 +60,56 @@ namespace Ashfall
                 return true;
             }
 
-            // 首次调查：发一次性奖励
+            // 首次调查：发一次性奖励。Blocker3：采用「先容量预检 → 全量发奖 → 才标 investigated」原子语义。
+            // 背包不足（满/部分容量）→ 不标 investigated、不全发、不清空 —— 玩家腾空间后可重试，绝不静默吞/丢首奖。
             var profile = inst.definition != null ? inst.definition.rewardProfile : null;
-            string got = "";
-            int given = 0;
-            if (vehicle != null && vehicle.Inventory != null && profile != null)
+            if (vehicle == null || vehicle.Inventory == null || profile == null)
             {
-                for (int i = 0; i < profile.Length; i++)
-                {
-                    var spec = profile[i];
-                    var tile = ResolveRewardTile(spec.stableId);
-                    if (tile == null) continue;
-                    int left = vehicle.Inventory.AddItem(tile, spec.count);
-                    int accepted = Mathf.Max(0, spec.count - left);
-                    if (accepted > 0)
-                    {
-                        given++;
-                        got += (got.Length > 0 ? "、" : "") + tile.displayName + "×" + accepted;
-                    }
-                }
+                LastVerdict = "reward_blocked_no_inventory";
+                LastRewardText = "";
+                PostMessage(inst, $"调查「{inst.definition.displayName}」，但载具数据链路异常，无法接收文明资源。请稍后再试。");
+                return true;
             }
 
+            var inv = vehicle.Inventory;
+            // 预检：rewardProfile 每一项都要能【完整】装下
+            bool canFitAll = true;
+            for (int i = 0; i < profile.Length; i++)
+            {
+                var tile = ResolveRewardTile(profile[i].stableId);
+                if (tile == null) continue;
+                if (!inv.CanAcceptFull(tile, profile[i].count)) { canFitAll = false; break; }
+            }
+
+            if (!canFitAll)
+            {
+                // 容量不足：不标 investigated，不部分发放；给明确提示，玩家腾空间后回来重试。
+                LastVerdict = "reward_blocked_no_cargo_space";
+                LastRewardText = "";
+                PostMessage(inst, $"调查「{inst.definition.displayName}」需要先腾出背包空间（文明资源将完整发放），当前载重/格子不足。请卸下部分货物后再来调查。");
+                return true;
+            }
+
+            // 全量发奖（预检已保证全部装下，AddItem 返回 0）
+            string got = "";
+            for (int i = 0; i < profile.Length; i++)
+            {
+                var spec = profile[i];
+                var tile = ResolveRewardTile(spec.stableId);
+                if (tile == null) continue;
+                int left = inv.AddItem(tile, spec.count);
+                int accepted = Mathf.Max(0, spec.count - left);
+                if (accepted > 0)
+                    got += (got.Length > 0 ? "、" : "") + tile.displayName + "×" + accepted;
+            }
+
+            // 全量发放成功后才标记 investigated（幂等基准）
             discovery.MarkInvestigated(inst.instanceId);
             LastVerdict = "investigated_first_time";
             LastRewardText = got;
             PostMessage(inst, got.Length > 0
                 ? $"调查「{inst.definition.displayName}」，提取古代文明数据，获得：{got}。"
-                : $"调查「{inst.definition.displayName}」，但舱内已满，文明资源散落一地。");
+                : $"调查「{inst.definition.displayName}」，未提取到有效资源。");
             return true;
         }
 

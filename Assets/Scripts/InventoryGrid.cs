@@ -114,6 +114,55 @@ namespace Ashfall
 
         public bool IsFullByWeight => TotalWeight >= maxWeight - 0.0001f;
 
+        /// <summary>
+        /// Blocker3（DEV-013）：只读预检 —— AddItem(def, amount) 能否【全部】装下（不修改任何状态）。
+        /// 与 AddItem 完全同构：先填同类未满堆，再开新格；受堆叠上限与载重上限双重限制。
+        /// 返回 true = 全部装入；false = 部分/全部装不下（调用方应拒绝发放，避免"部分奖励被静默吞"）。
+        /// </summary>
+        public bool CanAcceptFull(TileDefinition def, int amount)
+        {
+            if (def == null || amount <= 0) return true;
+            if (slots == null || slots.Length == 0) return false;
+
+            int width = Mathf.Max(1, def.gridWidth);
+            int limit = Mathf.Max(1, def.stackLimit);
+            float total = TotalWeight;
+            int remaining = amount;
+
+            // 1) 先填同类未满堆（只读估算：不修改 s.count，仅用堆余量 + 载重判定吸收量）
+            for (int i = 0; i < slots.Length && remaining > 0; i++)
+            {
+                var s = slots[i];
+                if (!s.isPrimary || s.def != def || s.count >= limit) continue;
+                int room = limit - s.count;
+                int absorb = 0;
+                while (absorb < room && remaining > 0 && total + def.weight <= maxWeight + 0.0001f)
+                {
+                    absorb++;
+                    total += def.weight;
+                    remaining--;
+                }
+                if (remaining > 0 && total + def.weight > maxWeight + 0.0001f) return false; // 载重满
+            }
+
+            // 2) 再开新格（横向连续 width 空槽）
+            while (remaining > 0)
+            {
+                int start = FindFreeRun(width);
+                if (start < 0) return false;   // 格子满
+                int want = Mathf.Min(remaining, limit);
+                int placed = 0;
+                while (placed < want && total + def.weight <= maxWeight + 0.0001f)
+                {
+                    placed++;
+                    total += def.weight;
+                }
+                if (placed <= 0) return false; // 载重满，无法再开新堆
+                remaining -= placed;
+            }
+            return true;
+        }
+
         // ---------- 容量 ----------
 
         /// <summary>

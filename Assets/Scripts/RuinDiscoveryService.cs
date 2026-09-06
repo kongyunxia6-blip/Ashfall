@@ -15,6 +15,11 @@ namespace Ashfall
     ///  - 不泄露完整房间轮廓与奖励坐标（不返回 rewardCells）；
     ///  - 不建第二套 CurrentDepth / Region（只读使用 grid/region 既有数据）。
     ///
+    /// 正式运行时接线（Blocker1 修复）：
+    ///  - 布局自动同步：Start/ReSyncFromGenerator 把 generator.Instances 全量登记，无需测试探针手动 RegisterAll；
+    ///  - 异常查询入口：玩家扫描组件（OreScanner，持有 R 键手势与网格中心）在扫矿后调用
+    ///    QueryAnomalyAround(center) 取文明异常信号并合入反馈 —— 资源扫描与文明扫描分层，但同一扫描动作都能得到异常。
+    ///
     /// discovered（世界/探索发现）与 investigated（核心是否已调查）在 Issue §10 明确区分：
     /// Core 首奖幂等基于 investigated；本服务是两者状态的唯一真相源。
     /// </summary>
@@ -26,6 +31,9 @@ namespace Ashfall
         [Tooltip("模糊信号距离上限（格）：bounds 边界超出本值 → 连模糊信号都不返回。")]
         [Min(1)] public int signalRange = 18;
 
+        [Tooltip("遗迹生成器（DEV-013）。Start/ReSync 时自动把其 Instances 同步成本服务布局 —— 正式运行时闭环，不经测试探针手动 RegisterAll。")]
+        public RuinGenerator generator;
+
         /// <summary>最近一次扫描结果（未扫为 null）。</summary>
         public RuinSignalResult LastSignal { get; private set; }
 
@@ -35,6 +43,25 @@ namespace Ashfall
         readonly Dictionary<string, bool> discovered = new Dictionary<string, bool>();
         readonly Dictionary<string, bool> investigated = new Dictionary<string, bool>();
         readonly List<RuinInstance> layout = new List<RuinInstance>();
+
+        /// <summary>
+        /// 正式运行时：DigGrid.Awake 生成在全部 Start 之前完成，因此本组件 Start 时
+        /// generator.Instances 已由 Ruin pass 填好，可自动同步布局 —— 无需测试探针手动 RegisterAll。
+        /// </summary>
+        void Start()
+        {
+            ReSyncFromGenerator();
+        }
+
+        /// <summary>
+        /// 把 generator.Instances 全量同步成本服务布局（幂等；重复调用按 instanceId 去重）。
+        /// 网格 Regenerate（同 seed 确定性重建）后也可再调一次保持同步。
+        /// </summary>
+        public void ReSyncFromGenerator()
+        {
+            if (generator == null) return;
+            RegisterAll(generator.Instances);
+        }
 
         public void RegisterInstance(RuinInstance inst)
         {

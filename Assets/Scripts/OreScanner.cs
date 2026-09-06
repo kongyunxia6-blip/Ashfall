@@ -101,6 +101,10 @@ namespace Ashfall
     ///
     /// 操作：R 键触发一次扫描（原型 Debug 键，方便后续接入正式模块系统）。0 消耗。
     ///
+    /// DEV-013：文明异常信号分层接入 —— 若配了 ruinDiscovery，同一 R 键扫描在扫矿之后
+    /// 会经 ScanAndReportAround 同步查询遗迹 Anomalous Structure Signal 并合入反馈
+    /// （矿扫描与文明扫描职责分层，但同一扫描动作都能得到文明异常）。
+    ///
     /// 挂载：玩家同物体（自动取同物体 DrillVehicle 的 grid；否则拖入）。
     /// </summary>
     public class OreScanner : MonoBehaviour
@@ -127,11 +131,20 @@ namespace Ashfall
         [Tooltip("扫描结果写进 GameManager.LastServiceMessage（HUD 中央消息）。关掉则只存 LastResult")]
         public bool surfaceToServiceMessage = true;
 
+        [Header("DEV-013：文明异常信号（分层接入玩家扫描动作）")]
+        [Tooltip("可选。非空时：玩家每次按扫描键，在扫矿之后同步查询最近遗迹的 Anomalous Structure Signal，\n" +
+                 "并把异常反馈合入同一句中央消息 —— 资源扫描(OreScanner)与文明扫描(RuinDiscoveryService)职责分层，\n" +
+                 "但同一个扫描动作都能得到文明异常信号。")]
+        public RuinDiscoveryService ruinDiscovery;
+
         DigGrid grid;
         DrillVehicle vehicle;
 
         /// <summary>最近一次扫描结果（未扫过为 null）。</summary>
         public OreScanResult LastResult { get; private set; }
+
+        /// <summary>最近一次扫描联动得到的遗迹信号（未扫/未配 discovery 为 null；供 HUD/测试断言）。</summary>
+        public RuinSignalResult LastRuinSignal { get; private set; }
 
         void Awake()
         {
@@ -152,11 +165,43 @@ namespace Ashfall
             if (!Input.GetKeyDown(scanKey)) return;
             if (vehicle == null || vehicle.IsDead) return;
 
-            var result = ScanAround(vehicle.transform.position);
-            LastResult = result;
+            var result = ScanAndReportAround(vehicle.transform.position);
             if (surfaceToServiceMessage && GameManager.Instance != null)
-                GameManager.Instance.LastServiceMessage = result.Summary;
-            Debug.Log("[OreScanner] " + result.Summary);
+                GameManager.Instance.LastServiceMessage = ComposeCombinedMessage(result.ore, result.ruin);
+            Debug.Log("[OreScanner] " + ComposeCombinedMessage(result.ore, result.ruin));
+        }
+
+        /// <summary>单次扫描的联动结果（矿 + 遗迹信号）。</summary>
+        public struct ScanOutcome
+        {
+            public OreScanResult ore;
+            public RuinSignalResult ruin;
+        }
+
+        /// <summary>
+        /// DEV-013：正式的「扫描动作」运行时闭环 —— 以世界坐标为中心扫矿，并（若配了 ruinDiscovery）
+        /// 同步查询文明异常信号。这是 OreScanner.Update（R 键）与验收探针共同走的唯一真实入口；
+        /// 测试探针不再直接手动 RegisterAll/调 discovery.ScanRuinAround 来验证接线。
+        /// </summary>
+        public ScanOutcome ScanAndReportAround(Vector3 worldPos)
+        {
+            var center = grid.WorldToGrid(worldPos);
+            var ore = ScanAt(center, EffectiveRadius);
+            LastResult = ore;
+            LastRuinSignal = null;
+            if (ruinDiscovery != null)
+                LastRuinSignal = ruinDiscovery.ScanRuinAround(center);
+            return new ScanOutcome { ore = ore, ruin = LastRuinSignal };
+        }
+
+        /// <summary>把矿 + 遗迹信号合成一句 HUD 消息（各自保持只读，纯文本）。</summary>
+        public string ComposeCombinedMessage(OreScanResult ore, RuinSignalResult ruin)
+        {
+            string mineral = ore != null ? ore.Summary : "";
+            string anomaly = ruin != null && ruin.hasSignal ? ruin.description : "";
+            if (anomaly.Length > 0)
+                return mineral + (mineral.Length > 0 ? "  |  " : "") + anomaly;
+            return mineral;
         }
 
         /// <summary>以世界坐标为中心扫描（转网格坐标后调 ScanAt）。半径 = 基础 + 外部加成（只读）。</summary>

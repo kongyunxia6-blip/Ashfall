@@ -26,6 +26,7 @@ namespace Ashfall
         public RuinSealSystem seal;
         public DrillVehicle vehicle;
         public EquipmentProgression equipment;
+        public OreScanner oreScanner;      // DEV-013 Blocker1：真实扫描动作入口
         public TileDefinition wallAsset;
         public TileDefinition sealAsset;
         public TileDefinition coreAsset;
@@ -84,10 +85,10 @@ namespace Ashfall
             return null;
         }
 
-        // ---------- D. RuinDiscoveryService 只读信号 ----------
+        // ---------- D. RuinDiscoveryService 只读信号（真实运行时闭环） ----------
         IEnumerator D_DiscoverySignals()
         {
-            sb.AppendLine("\n==== D. 遗迹发现信号（只读） ====");
+            sb.AppendLine("\n==== D. 遗迹发现信号（真实运行时扫描动作，只读） ====");
             if (grid == null || generator == null || discovery == null)
             {
                 Assert(false, "D_Rig", "缺 grid/generator/discovery"); yield break;
@@ -99,33 +100,45 @@ namespace Ashfall
             }
             Assert(generator.HasInstances, "D_RuinGenerated", $"seed 下生成 {generator.Instances.Count} 座遗迹（{ruin.instanceId}）");
 
-            discovery.RegisterAll(generator.Instances);
-            // 远程（地表出生区，bounds 在 Deep 44+）：应无信号或至多模糊（dist > signalRange → 无）
+            // Blocker1：布局已由 discovery.Start 自动同步（generator.Instances → discovery），
+            // 不再需要 Probe 手动 RegisterAll —— 正式运行时闭环。
+            Assert(discovery.Instances.Count > 0, "D_AutoSynced", $"discovery.Start 已自动同步 generator.Instances（count={discovery.Instances.Count}，未手动 RegisterAll）");
+
+            // 通过【真实玩家扫描组件 OreScanner.ScanAndReportAround】驱动（R 键同款入口），
+            // 验证「玩家按扫描动作 → 得到文明异常信号」的正式闭环，而非 Probe 直接调 discovery。
+            if (oreScanner == null) { Assert(false, "D_NoScanner", "场景缺 OreScanner（玩家扫描组件）"); yield break; }
+            Assert(oreScanner.ruinDiscovery == discovery, "D_Scanner_Wired", "OreScanner.ruinDiscovery 已接入 discovery");
+
+            // 远距离（地表出生区，bounds 在 Deep 44+）：扫描后不触发发现（dist > signalRange → 无信号）
             var farCenter = new Vector2Int(grid.Width / 2, 2);
-            var farRes = discovery.ScanRuinAround(farCenter);
-            Assert(!farRes.hasSignal || !farRes.isDiscovered, "D_Far_NoDiscover",
-                $"远处({farCenter})未触发发现（hasSignal={farRes.hasSignal}, dist={farRes.distance}）");
+            var farOut = oreScanner.ScanAndReportAround(grid.GridToWorld(farCenter.x, farCenter.y));
+            Assert(farOut.ruin == null || !farOut.ruin.hasSignal || !farOut.ruin.isDiscovered, "D_Far_NoDiscover",
+                $"远处({farCenter})扫描未触发发现（hasSignal={farOut.ruin != null}, dist={(farOut.ruin != null ? farOut.ruin.distance : -1)}）");
             Assert(!discovery.IsDiscovered(ruin.instanceId), "D_Far_StateClean", "远距离不置 discovered");
 
-            // 近处（bounds 内部）：触发 discovered
+            // 近处（bounds 内部）：同一扫描动作触发 discovered
             var nearCenter = new Vector2Int(ruin.bounds.xMin, ruin.bounds.yMin);
-            var nearRes = discovery.ScanRuinAround(nearCenter);
-            Assert(nearRes.firstDiscovery, "D_Near_FirstDiscover", $"接近{boundsStr(ruin)}触发首发现");
+            var nearOut = oreScanner.ScanAndReportAround(grid.GridToWorld(nearCenter.x, nearCenter.y));
+            Assert(nearOut.ruin != null && nearOut.ruin.firstDiscovery, "D_Near_FirstDiscover", $"接近{boundsStr(ruin)}触发首发现");
             Assert(discovery.IsDiscovered(ruin.instanceId), "D_Near_StateSet", "近距离置 discovered=true");
-            Assert(nearRes.isDiscovered, "D_Res_IsDiscovered", "返回结果 isDiscovered=true");
+            Assert(nearOut.ruin != null && nearOut.ruin.isDiscovered, "D_Res_IsDiscovered", "返回结果 isDiscovered=true");
+            string combinedMsg = oreScanner.ComposeCombinedMessage(nearOut.ore, nearOut.ruin);
+            Assert(combinedMsg.Length > 0 && combinedMsg.Contains("古代"), "D_CombinedFeedback",
+                $"玩家扫描反馈合入文明异常（含「{ruin.definition.displayName}」等字样）");
 
             // 再次扫描不再触发首发现（幂等）
-            discovery.ScanRuinAround(nearCenter);
+            oreScanner.ScanAndReportAround(grid.GridToWorld(nearCenter.x, nearCenter.y));
             Assert(discovery.DiscoveredCount == 1, "D_Discover_Idempotent", "首发现幂等（计数 1，不重复）");
 
             // 扫描前后世界不变（只读）：记录核心/墙/奖励格 tile，扫描后应一致
             var tSeal = grid.GetTile(ruin.entranceCell.x, ruin.entranceCell.y);
             var tCore = grid.GetTile(ruin.coreCell.x, ruin.coreCell.y);
-            discovery.ScanRuinAround(new Vector2Int(grid.Width / 2, 2));
-            discovery.ScanRuinAround(nearCenter);
+            oreScanner.ScanAndReportAround(grid.GridToWorld(grid.Width / 2, 2));
+            oreScanner.ScanAndReportAround(grid.GridToWorld(nearCenter.x, nearCenter.y));
             Assert(grid.GetTile(ruin.entranceCell.x, ruin.entranceCell.y) == tSeal, "D_ReadOnly_Seal", "扫描后 Seal 格未变");
             Assert(grid.GetTile(ruin.coreCell.x, ruin.coreCell.y) == tCore, "D_ReadOnly_Core", "扫描后 Core 格未变");
-            Assert(!ruin.rewardCells.Exists(c => nearRes.description.Contains("坐标")), "D_No_RewardLeak", "信号描述不泄露奖励坐标");
+            Assert(!ruin.rewardCells.Exists(c => (nearOut.ruin != null ? nearOut.ruin.description : "").Contains("坐标")),
+                "D_No_RewardLeak", "信号描述不泄露奖励坐标");
         }
 
         static string boundsStr(RuinInstance r) => $"({r.bounds.x},{r.bounds.y},{r.bounds.width},{r.bounds.height})";
@@ -218,10 +231,10 @@ namespace Ashfall
                 new Vector2Int(c.x, c.y + 1), new Vector2Int(c.x, c.y - 1),
             };
 
-        // ---------- F. AncientRelayCore 一次性调查 + 幂等 ----------
+        // ---------- F. AncientRelayCore 一次性调查 + 首奖守恒（Blocker3：full cargo / retry） ----------
         IEnumerator F_AncientRelayCore()
         {
-            sb.AppendLine("\n==== F. AncientRelayCore 一次性调查/奖励 ====");
+            sb.AppendLine("\n==== F. AncientRelayCore 一次性调查 + 首奖守恒（full cargo / retry） ====");
             if (grid == null || core == null || vehicle == null)
             {
                 Assert(false, "F_Rig", "缺 core/vehicle"); yield break;
@@ -230,35 +243,64 @@ namespace Ashfall
             if (ruin == null) { Assert(false, "F_NoRuin", "无遗迹"); yield break; }
 
             if (discovery == null) { Assert(false, "F_NoDiscovery", "缺 discovery"); yield break; }
-            discovery.RegisterAll(generator != null ? generator.Instances : null);
+            // Blocker1：布局已由 discovery.Start 自动同步（generator.Instances → discovery），无需手动 RegisterAll。
 
             var cc = ruin.coreCell;
             Assert(grid.GetTile(cc.x, cc.y) != null && grid.GetTile(cc.x, cc.y).blockType == BlockType.AncientRelayCore,
                 "F_Pre_CoreInPlace", $"({cc.x},{cc.y}) 房间内是 AncientRelayCore");
 
-            // 首次交互
-            var invBefore = Snapshot(vehicle);
-            var res1 = vehicle.TryDigHit(cc);
-            Assert(res1 == DigHitResult.Interacted, "F_First_Interacted", $"首次命中 Core → Interacted（{res1}）");
-            Assert(discovery.IsInvestigated(ruin.instanceId), "F_First_Investigated", "首次交互标记 investigated=true");
+            var inv = vehicle.Inventory;
+            if (inv == null) { Assert(false, "F_NoInv", "玩家无 Inventory"); yield break; }
+            Assert(!discovery.IsInvestigated(ruin.instanceId), "F_Pre_Uninvestigated", "F 起点遗迹未被调查（可测首奖）");
 
-            // 奖励进入现有 Inventory（fragment×1 + alloy×3）
-            int got = inventoryDelta(invBefore);
-            Assert(got > 0, "F_Reward_Granted", $"首次调查获得文明资源（Inventory 净增 {got} 件：{core.LastRewardText}）");
-            Assert(invBefore.hasFragment == false && HasItem(vehicle, fragmentAsset), "F_Reward_Fragment",
-                "AncientDataFragment 进入现有 Inventory");
-            Assert(invBefore.alloyCount == 0 && HasItem(vehicle, alloyAsset), "F_Reward_Alloy", "AncientAlloy 进入现有 Inventory");
-            Assert(core.LastVerdict == "investigated_first_time", "F_First_Verdict", "Core 状态 = investigated_first_time");
+            // ---- Phase A：背包满 → 应【拒绝】且【不标 investigated】、【不全发、无部分发放】（不静默吞首奖）----
+            {
+                float room = inv.MaxWeight - inv.TotalWeight;
+                int need = room > 0.0001f ? Mathf.CeilToInt(room / 0.8f) + 2 : 2;   // 用 alloy 补满载重
+                if (need > 0) inv.AddItem(alloyAsset, need);
 
-            // 二次交互：不重复首奖
-            var invAfter1 = Snapshot(vehicle);
+                bool rewardWontFit = !inv.CanAcceptFull(fragmentAsset, 1) || !inv.CanAcceptFull(alloyAsset, 3);
+                Assert(rewardWontFit, "F_A_CargoFull",
+                    $"背包接近满载（weight={inv.TotalWeight:F1}/{inv.MaxWeight:F1}），奖励应放不下");
+
+                var snapFull = Snapshot(vehicle);
+                int cashA = GameManager.Instance != null ? GameManager.Instance.Cash : 0;
+                var resBlock = vehicle.TryDigHit(cc);
+                Assert(resBlock == DigHitResult.Interacted, "F_A_Interacted", "满背包命中 Core 仍为 Interacted（交互动作不被吞）");
+                Assert(core.LastVerdict == "reward_blocked_no_cargo_space", "F_A_Blocked_Verdict",
+                    $"背包满 → 明确拒绝发奖（{core.LastVerdict}），给「腾空间重试」反馈");
+                Assert(!discovery.IsInvestigated(ruin.instanceId), "F_A_Not_Investigated",
+                    "背包满 → 不标 investigated（奖励不因满包而永久丢失）");
+                int deltaA = inventoryDelta(snapFull);
+                Assert(deltaA == 0, "F_A_NoPartialGrant", $"满背包被拒：无任何部分/全量奖励入包（Inventory 净增 {deltaA}）");
+                Assert(cashA == (GameManager.Instance != null ? GameManager.Instance.Cash : 0), "F_A_NoCashChange",
+                    "拒绝发奖不扣现金（无副作用）");
+            }
+
+            // ---- Phase B：腾空 → 重试 → 全量首奖 + 总量守恒 ----
+            inv.Clear();
+            var snapEmpty = Snapshot(vehicle);
+            var resGrant = vehicle.TryDigHit(cc);
+            Assert(resGrant == DigHitResult.Interacted, "F_B_Retry_Interacted", "腾空后重试命中 Core → Interacted");
+            Assert(discovery.IsInvestigated(ruin.instanceId), "F_B_Investigated", "腾空后重试 → 标记 investigated=true");
+            Assert(core.LastVerdict == "investigated_first_time", "F_B_First_Verdict", "Core 状态 = investigated_first_time");
+            Assert(!snapEmpty.hasFragment && HasItem(vehicle, fragmentAsset), "F_B_Reward_Fragment",
+                "全量首奖：AncientDataFragment×1 进入现有 Inventory");
+            Assert(Snapshot(vehicle).alloyCount >= 3, "F_B_Reward_Alloy",
+                $"全量首奖：AncientAlloy×3 进入现有 Inventory（实得 {Snapshot(vehicle).alloyCount}）");
+            int deltaGrant = inventoryDelta(snapEmpty);
+            Assert(deltaGrant >= 4, "F_B_Conservation_Total",
+                $"首奖总量守恒：fragment×1 + alloy×3 全量入包（Inventory 净增 {deltaGrant} 件，不丢不复制）");
+
+            // ---- Phase C：二次 → 已调查，不再发首奖（幂等，不复制） ----
+            var snapAfter1 = Snapshot(vehicle);
             var res2 = vehicle.TryDigHit(cc);
-            Assert(res2 == DigHitResult.Interacted, "F_Second_Interacted", "二次命中仍 Interacted（交互点不消失）");
+            Assert(res2 == DigHitResult.Interacted, "F_C_Second_Interacted", "二次命中仍 Interacted（交互点不消失）");
             Assert(grid.GetTile(cc.x, cc.y) != null && grid.GetTile(cc.x, cc.y).blockType == BlockType.AncientRelayCore,
-                "F_Core_NotDestroyed", "Core 是装置点，不被挖穿/不消失");
-            int got2 = inventoryDelta(invAfter1);
-            Assert(got2 == 0, "F_Second_NoRepeat", $"二次交互不重复发首奖（Inventory 净增 {got2}）");
-            Assert(core.LastVerdict == "already_investigated", "F_Second_Verdict", "Core 状态 = already_investigated");
+                "F_C_Core_NotDestroyed", "Core 是装置点，不被挖穿/不消失");
+            int got2 = inventoryDelta(snapAfter1);
+            Assert(got2 == 0, "F_C_Second_NoRepeat", $"二次交互不重复发首奖（Inventory 净增 {got2}）");
+            Assert(core.LastVerdict == "already_investigated", "F_C_Second_Verdict", "Core 状态 = already_investigated");
         }
 
         // 简易背包快照（只关心 fragment/alloy 计数 + 总件数）

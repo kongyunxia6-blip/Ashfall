@@ -96,6 +96,58 @@ namespace Ashfall.EditorTools
             Assert(r1.ruinGen.Instances[0].definition == RuinCatalog.AncientRelay, "D_Def_Link", "RuinInstance 引用 AncientRelayRoom 定义", sb, ref pass, ref fail);
 
             CleanupRig(r1); CleanupRig(r1b); CleanupRig(r2);
+
+            // ---- E. Blocker2：EquipmentProgression ownedModules 旧序列化迁移自愈 ----
+            E_OwnedModules_Migration(sb, ref pass, ref fail);
+        }
+
+        // ---------- E. ownedModules 4→5 迁移自愈（Blocker2） ----------
+        static void E_OwnedModules_Migration(StringBuilder sb, ref int pass, ref int fail)
+        {
+            var eqGo = new GameObject("DEV013_EqMig");
+            var eq = eqGo.AddComponent<EquipmentProgression>();   // Awake → EnsureModuleStorage 已扩到 enum 数
+
+            // 模拟"旧 DEV-010/011 场景序列化出的长度 4 ownedModules"：强行退回 4，且第 0/1 位已拥有（旧模块状态）
+            eq.ownedModules = new bool[4];
+            eq.ownedModules[(int)EquipmentModule.EfficientMotor] = true;      // 0
+            eq.ownedModules[(int)EquipmentModule.ReinforcedCargoRack] = true; // 1
+            // 2 DrillCooling / 3 SurveySensor 未拥有
+
+            // 显式调用迁移（等价 Awake/OnValidate 在旧场景加载时自愈）
+            eq.EnsureModuleStorage();
+
+            // 断言 1：长度扩到当前 enum 数（5，含 RuinAccessKey）
+            int need = System.Enum.GetValues(typeof(EquipmentModule)).Length;
+            Assert(eq.ownedModules.Length == need, "E_Mig_Resized",
+                $"旧 ownedModules[4] 迁移 → [{eq.ownedModules.Length}]（enum 共 {need}）", sb, ref pass, ref fail);
+
+            // 断言 2：前 4 位旧模块状态保留（0/1 true，2/3 false）
+            Assert(eq.IsOwned(EquipmentModule.EfficientMotor) && eq.IsOwned(EquipmentModule.ReinforcedCargoRack),
+                "E_Mig_PreserveOwned", "迁移后旧模块（节能电机/强化货架）仍 owned", sb, ref pass, ref fail);
+            Assert(!eq.IsOwned(EquipmentModule.DrillCooling) && !eq.IsOwned(EquipmentModule.SurveySensor),
+                "E_Mig_UnOwnedKept", "未拥有的旧模块迁移后仍为 false", sb, ref pass, ref fail);
+
+            // 断言 3：RuinAccessKey（int=4）现在索引安全，可 IsOwned / 置 true（不越界）
+            int raIdx = (int)EquipmentModule.RuinAccessKey;
+            Assert(raIdx == 4 && raIdx < eq.ownedModules.Length, "E_Mig_RuinAccessInRange",
+                $"RuinAccessKey int={raIdx} < ownedModules.Length={eq.ownedModules.Length}", sb, ref pass, ref fail);
+            bool noOOB = false;
+            try { eq.IsOwned(EquipmentModule.RuinAccessKey); noOOB = true; }
+            catch (System.Exception) { noOOB = false; }
+            Assert(noOOB, "E_Mig_IsOwnedNoOOB", "IsOwned(RuinAccessKey) 不越界", sb, ref pass, ref fail);
+
+            // 断言 4：RuinAccessKey Buy/Equip/Unequip 交易路径不越界（IsOwned 读 + ownedModules[4] 写）
+            // 绕过 CanAccessWorkbench 门控：直接验证数据层索引（EnsureModuleStorage + IsOwned 在 Array write 前已兜底）
+            eq.ownedModules[raIdx] = true;   // 相当于 TryBuyModule 成功后的写入（此时长度已扩到 5）
+            Assert(eq.IsOwned(EquipmentModule.RuinAccessKey), "E_Mig_RuinAccessOwned",
+                "RuinAccessKey owned 写入成功（length 5 索引 4 安全）", sb, ref pass, ref fail);
+            // 装备槽仍可装（equipped[0] = RuinAccessKey 不依赖 ownedModules 长度）
+            eq.equipped[0] = EquipmentModule.RuinAccessKey;
+            Assert(eq.IsEquipped(EquipmentModule.RuinAccessKey), "E_Mig_Equip", "RuinAccessKey 可装备", sb, ref pass, ref fail);
+            eq.equipped[0] = null;
+            Assert(!eq.IsEquipped(EquipmentModule.RuinAccessKey), "E_Mig_Unequip", "RuinAccessKey 可卸下", sb, ref pass, ref fail);
+
+            Object.DestroyImmediate(eqGo);
         }
 
         // 下面是在临时 GameObject 上搭 rig

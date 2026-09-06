@@ -164,6 +164,11 @@ namespace Ashfall.EditorTools
             vehicle.startJetting = false;
             playerGo.AddComponent<MiningFeelController>();
 
+            // DEV-007 扫描（挂玩家，R 键手势）。grid 由 OreScanner.Start 自动取 vehicle.grid；
+            // ruinDiscovery 在下面 discovery 组件创建后回填（DEV-013 文明异常接入）。
+            var oreScanner = playerGo.AddComponent<OreScanner>();
+            oreScanner.scanRadius = 4;
+
             // ---- 总控（Equipment / RunRisk / HUD / 环境）----
             var gmGo = new GameObject("GameManager");
             gmGo.AddComponent<UpgradeSystem>();
@@ -182,10 +187,14 @@ namespace Ashfall.EditorTools
             // DEV-013 系统 + 探针（挂 GameManager 物体，方便 DrillVehicle Start 场景级查找）
             var sealSys = gmGo.AddComponent<RuinSealSystem>();
             var discovery = gmGo.AddComponent<RuinDiscoveryService>();
+            discovery.generator = ruinGen;                 // 运行时自动把 generator.Instances 同步成布局（正式闭环）
             var coreSys = gmGo.AddComponent<AncientRelayCoreSystem>();
             coreSys.discovery = discovery;
             coreSys.ancientDataTile = dataFragment;
             coreSys.ancientAlloyTile = ancientAlloy;
+
+            // 把玩家扫描组件接入文明异常信号（同一 R 键扫描在扫矿后得到异常反馈）
+            oreScanner.ruinDiscovery = discovery;
 
             var probe = gmGo.AddComponent<AncientRelayRoomV1Probe>();
             probe.grid = digGrid;
@@ -195,6 +204,7 @@ namespace Ashfall.EditorTools
             probe.seal = sealSys;
             probe.vehicle = vehicle;
             probe.equipment = gm.Equipment;
+            probe.oreScanner = oreScanner;   // Blocker1：真实扫描动作（OreScanner.ScanAndReportAround）
             probe.wallAsset = wallTile;
             probe.sealAsset = sealTile;
             probe.coreAsset = coreTile;
