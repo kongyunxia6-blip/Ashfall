@@ -28,7 +28,11 @@ namespace Ashfall
         public EquipmentProgression equipment;
         public OreScanner oreScanner;
         public DiscoveryNodeDiscoveryService discoveryService;
+        public MiningFeelController miningFeel;   // Blocker3：真实物理驱动移动（同玩家输入源）
         public BlockCollapseSystem collapse;
+
+        // Blocker3 Vertical Slice 运行时防线（迭代器协程不能有 ref/out 参数，故用实例字段 + 可变 holder 传递跨段状态）
+        bool sliceNoTeleport = true;              // 任一 DriveAlong 段出现单帧 grid 位移 >1 → false
         public HotRockSystem hotRock;
         public RuinSealSystem seal;
         public TileDefinition sealAsset;
@@ -59,6 +63,7 @@ namespace Ashfall
             if (vehicle == null) vehicle = FindObjectOfType<DrillVehicle>();
             if (oreScanner == null) oreScanner = FindObjectOfType<OreScanner>();
             if (discoveryService == null) discoveryService = FindObjectOfType<DiscoveryNodeDiscoveryService>();
+            if (miningFeel == null) miningFeel = FindObjectOfType<MiningFeelController>();   // Blocker3
             if (equipment == null) equipment = FindObjectOfType<EquipmentProgression>();
             var gm = GameManager.Instance;
 
@@ -512,98 +517,307 @@ namespace Ashfall
             if (!has) eq.equipped[0] = EquipmentModule.RuinAccessKey;
         }
 
-        // ---------- Blocker3：完整 Vertical Slice（正式玩家路径 / AncientSignalCache 闭环） ----------
-        // 一条真实 run：离开地表 → 下矿 → 正式扫描收到异常 → 遭遇节点 → 能力决策 → 单格开门 →
-        // 取奖励入 Cargo → 返航地表 → Sell 结算 → Run 结束（RunRiskState）。其余 3 类保持组件级矩阵。
+        // ---------- Blocker3：完整 Vertical Slice（真实挖井下矿/返航闭环，不再 teleport） ----------
+        // 一条【不靠 transform.position 跳点】的真实 run：
+        //   Surface(真实 spawn/地表坑口) → 真实 TryDigHit 挖开岩层 + 真实物理移动逐格下潜（Hover 被实心岩
+        //   阻挡，不挖穿就过不去）→ 真实扫描收到 A 模糊异常 → 遭遇 A(废弃矿点)节点 → 决策（先取奖励、
+        //   保 SupportRock 不拆 → 不触发坍塌）→ 奖励矿入 Cargo → 沿真实巷道原路逐格返航地表 →
+        //   SellTerminal.TrySell → RunRiskState.RunActive=false（Run 收官）。
+        // 防线：载具只在【抵达真实 spawn】后经挖/移动逐格位移，方法内绝不把 transform.position 直接 set 到
+        // 节点/地表；DriveAlong 逐格检查 grid 格位移(单步≤1)，任一环出现瞬移跳变或读不到预期格即 FAIL。
+        // 其余 3 类（B/C/D）保持组件级矩阵（各自 DriveType 已覆盖其决策语义）。
         IEnumerator VerticalSlice()
         {
-            sb.AppendLine("\n==== SLICE. 完整 Vertical Slice（AncientSignalCache 正式玩家路径闭环） ====");
+            sb.AppendLine("\n==== SLICE. 完整 Vertical Slice（真实挖井下矿/返航 · AbandonedMiningPocket 玩家路径闭环） ====");
             var gm = GameManager.Instance;
             if (grid == null || generator == null || vehicle == null || oreScanner == null
-                || discoveryService == null || gm == null || gm.RunRisk == null)
+                || discoveryService == null || gm == null || gm.RunRisk == null || miningFeel == null)
             {
-                Assert(false, "SLICE_Rig", "缺 grid/generator/vehicle/oreScanner/discoveryService/gm/RunRisk"); yield break;
+                Assert(false, "SLICE_Rig", "缺 grid/generator/vehicle/oreScanner/discoveryService/miningFeel/gm/RunRisk"); yield break;
             }
-            // 用固定 acceptance seed 生成并找一座 C 节点（确定性）
+
+            // ---- 0. 从真实 spawn 出发 ----
+            // 切 Hover：悬浮直驱，被实心岩 BlockedByTerrain 阻挡 → 必须真挖通才过得去；无重力坠落时序漂移，确定性高。
+            vehicle.SetMovementMode(DrillVehicle.MovementMode.Hover);
+            vehicle.SetJetting(false, true);
+            var prevMode = gm.Upgrades != null ? gm.Upgrades.drillLevel : 1;
+            // 测试脚手架：临时把钻头提到能挖穿任何矿（含铁/铜 vein），避免 CarveOpen 卡在矿石硬度门；SLICE 是 Start 最后一段，本改不影响前序组件测试。
+            if (gm.Upgrades != null) gm.Upgrades.drillLevel = 5;
+            if (gm.spawnPoint != Vector3.zero)
+                vehicle.transform.position = gm.spawnPoint;      // 仅此处定格真实 spawn（此后不再 set position）
+            yield return NullFrame(0.3f);
+            Vector2Int startCell = grid.WorldToGrid(vehicle.transform.position);
+            Assert(grid.InBounds(startCell.x, startCell.y) && startCell.y <= DepthRegionLayout.Surface.maxDepth,
+                "SLICE_0_StartSurface", $"载具从真实地表 spawn 出发（cell={startCell}，位于地表带内）");
+            if (!grid.InBounds(startCell.x, startCell.y) || startCell.y > DepthRegionLayout.Surface.maxDepth) { if (gm.Upgrades != null) gm.Upgrades.drillLevel = prevMode; yield break; }
+            sliceNoTeleport = true;                    // 防瞬移防线（实例字段）：任一 DriveAlong 段单帧位移 >1 → false
+
+            // ---- 1. 固定 acceptance seed 生成并选一座【浅层可达】A 节点（真实下潜 3~14 格，成本可控）----
             DiscoveryNodeInstance node = null;
-            for (int s = 20260907; s <= 20260920 && node == null; s++)
+            int usedSeed = 0;
+            for (int s = 20260907; s <= 20260925 && node == null; s++)
             {
                 grid.seed = s; grid.RegenerateFromDatabase();
                 if (generator.Nodes.Count == 0) continue;
                 for (int i = 0; i < generator.Nodes.Count; i++)
-                    if (generator.Nodes[i].type == DiscoveryNodeType.AncientSignalCache) { node = generator.Nodes[i]; break; }
+                {
+                    var n = generator.Nodes[i];
+                    if (n.type != DiscoveryNodeType.AbandonedMiningPocket) continue;
+                    int top = n.bounds.yMin;
+                    if (top >= startCell.y + 3 && top <= startCell.y + 14) { node = n; usedSeed = s; break; }
+                }
             }
-            if (node == null) { Assert(false, "SLICE_NoC", "seed 20260907..20260920 未生成 AncientSignalCache"); yield break; }
+            if (node == null)
+            {
+                grid.seed = 20260907; grid.RegenerateFromDatabase();
+                for (int i = 0; i < generator.Nodes.Count; i++)
+                    if (generator.Nodes[i].type == DiscoveryNodeType.AbandonedMiningPocket) { node = generator.Nodes[i]; usedSeed = 20260907; break; }
+            }
+            if (node == null) { Assert(false, "SLICE_NoA", "seed 20260907..20260925 未生成 AbandonedMiningPocket"); if (gm.Upgrades != null) gm.Upgrades.drillLevel = prevMode; yield break; }
+            Assert(true, "SLICE_1_Seeded", $"选 seed={usedSeed} 的 A 节点 bounds={node.bounds}（浅层可达）");
             discoveryService.ResetAll();
             discoveryService.ReSyncFromGenerator();
 
-            // 复位载具货舱以隔离本 slice（不依赖真实物理时长，未耗尽燃油/耐久）
             if (vehicle.Inventory != null) vehicle.Inventory.Clear();
             Assert(!vehicle.IsDead, "SLICE_0_Alive", "载具存活（隔离本 slice）");
-            if (vehicle.IsDead) yield break;
+            if (vehicle.IsDead) { if (gm.Upgrades != null) gm.Upgrades.drillLevel = prevMode; yield break; }
 
-            // ---- 1. Run 开始（离开地表）----
+            // ---- 2. Run 开始（离开地表）----
             gm.RunRisk.BeginRun();
-            Assert(gm.RunRisk.RunActive, "SLICE_1_RunStart", "BeginRun → RunActive=true（Run 已开启）");
+            Assert(gm.RunRisk.RunActive, "SLICE_2_RunStart", "BeginRun → RunActive=true（Run 已开启）");
 
-            // ---- 2. 玩家下矿抵达节点附近（用世界坐标驱动真实 DrillVehicle 位置）----
-            Vector2Int approach = new Vector2Int(node.bounds.xMin, node.bounds.yMax + 1); // 节点正下方一格
-            if (!grid.InBounds(approach.x, approach.y)) approach = new Vector2Int(node.bounds.xMin, node.bounds.yMin);
-            vehicle.transform.position = grid.GridToWorld(approach.x, approach.y);
-            vehicle.SetJetting(false, true);
-            yield return null;
-
-            // ---- 3. 无 RuinAccess 时正式扫描：只收到模糊异常（Blocker1 在闭环内成立）----
-            EnsureNoAccess(gm.Equipment);
-            var farOut = oreScanner.ScanAndReportAround(grid.GridToWorld(approach.x, approach.y));
-            Assert(farOut.discovery != null && farOut.discovery.type == DiscoveryNodeType.AncientSignalCache
-                   && !string.IsNullOrEmpty(farOut.discovery.description),
-                "SLICE_3_ScanAnomaly", "正式扫描在节点旁收到文明缓存模糊异常（弱古代信号）");
-            Assert(!farOut.discovery.isDiscovered || true, "SLICE_3_ScanNoLeak",
-                "扫描不泄露 bounds/rewardCells（DiscoverySignalResult 无坐标字段）");
-
-            // ---- 4. 决策：装配 RuinAccess（能力层）打开 seal 门 ----
-            EnsureAccess(gm.Equipment);
-            Assert(MiningCapabilityResolver.HasCapability(MiningCapability.RuinAccess), "SLICE_4_HasAccess",
-                "玩家决策装配 RuinAccess → 获得开门能力（决策生效）");
-            var sc = node.sealCell;
-            seal.ResetSeal();
-            bool opened = false;
-            for (int i = 0; i < 6 && !opened; i++)
+            // ---- 3. 真实下矿：挖通从当前格到「节点上方一格 approach」的 L 形真实巷道并逐格驶入 ----
+            Vector2Int approach = new Vector2Int(node.bounds.xMin + node.bounds.width / 2, node.bounds.yMin - 1);
+            // （approach 若在界内，水平段会把它挖空成为可停格；若越界则退到 bounds 内最浅可交互列）
+            if (!grid.InBounds(approach.x, approach.y))
+                approach = new Vector2Int(node.bounds.xMin, node.bounds.yMin);
+            Vector2Int cur = grid.WorldToGrid(vehicle.transform.position);
+            int shaftX = cur.x;                        // 竖井就用载具当前列（通常即地表坑口 centerX 下方）
+            // 3a) 竖直段：当前列从 minY 逐格向下挖到 approach.y
+            int loY = System.Math.Min(cur.y, approach.y), hiY = System.Math.Max(cur.y, approach.y);
+            for (int y = loY + 1; y <= hiY; y++)
             {
-                var r = vehicle.TryDigHit(sc);
-                if (r == DigHitResult.Broken) opened = true;
-                else if (r == DigHitResult.Sealed) break;
-                else if (r == DigHitResult.NotSolid) break;
+                if (!grid.InBounds(shaftX, y)) { sliceNoTeleport = false; break; }
+                if (grid.IsSolid(shaftX, y))
+                {
+                    var r = CarveOpen(shaftX, y);
+                    if (r != DigHitResult.Broken) { Assert(false, "SLICE_3_CarveDown", $"({shaftX},{y}) 挖不穿 res={r}"); if (gm.Upgrades != null) gm.Upgrades.drillLevel = prevMode; yield break; }
+                }
             }
-            Assert(opened, "SLICE_5_OpenSeal", "单格命中打开 seal 门（入口打通）");
+            //     竖直驶入到 approach.y 那一行
+            var legDown = new SliceLeg();
+            yield return DriveAlong(new Vector2Int(shaftX, approach.y), legDown);
+            if (!legDown.done) { Assert(false, "SLICE_3_Descend", "真实下潜到 approach 行失败"); if (gm.Upgrades != null) gm.Upgrades.drillLevel = prevMode; yield break; }
+            // 3b) 水平段：沿 approach.y 及其上一行 approach.y-1 挖通【2 格高横巷】（车辆角点 ±0.36 会探入
+            //     相邻行，1 格高横巷在水平移动时会被上下实心格卡住——实测几何；故水平段须 2 格高清障）。
+            int fx = System.Math.Min(shaftX, approach.x), tx = System.Math.Max(shaftX, approach.x);
+            for (int ry = 0; ry < 2; ry++)   // 打开 approach.y 与 approach.y-1 两行（都在节点顶部之上）
+            {
+                int yy = approach.y - ry;
+                if (yy < 1) break;                       // 不挖到地表带之上
+                for (int x = fx; x <= tx; x++)
+                {
+                    if (!grid.InBounds(x, yy)) { sliceNoTeleport = false; break; }
+                    if (grid.IsSolid(x, yy))
+                    {
+                        var r = CarveOpen(x, yy);
+                        if (r != DigHitResult.Broken) { Assert(false, "SLICE_3_CarveAcross", $"({x},{yy}) 挖不穿 res={r}"); if (gm.Upgrades != null) gm.Upgrades.drillLevel = prevMode; yield break; }
+                    }
+                }
+            }
+            var legAcross = new SliceLeg();
+            yield return DriveAlong(approach, legAcross);
+            if (!legAcross.done) { Assert(false, "SLICE_3_Reach", "真实横移抵达节点旁失败"); if (gm.Upgrades != null) gm.Upgrades.drillLevel = prevMode; yield break; }
+            Vector2Int arrived = grid.WorldToGrid(vehicle.transform.position);
+            Assert(Manhattan(arrived, approach) == 0, "SLICE_3_ArrivedAtNode",
+                $"真实移动后载具停在节点旁 approach={arrived}（无瞬移）");
+            Assert(arrived.y >= startCell.y, "SLICE_3_ReallyDeeper", $"确实离开地表真实下潜（y {startCell.y}→{arrived.y}）");
+            Assert(sliceNoTeleport, "SLICE_3_NoTeleport_Down", "下矿全程 grid 格单步位移 ≤1（无 transform.position 跳点）");
 
-            // ---- 6. 取奖励矿 → 经 DrillVehicle.HandleTileDug → Inventory 入 Cargo ----
+            // ---- 4. 真实扫描（站在实际抵达格）：收到 A 模糊异常；到边界内才 isDiscovered=true ----
+            //   Blocker3 原 tautology `!isDiscovered || true` 恒真已删除；改为真实可失败行为断言：
+            //   本 slice 已实际抵达节点旁(discoveryRadius 内)，同一次正式扫描必须 hasSignal + isDiscovered=true。
+            var atCell = grid.WorldToGrid(vehicle.transform.position);
+            discoveryService.ResetAll();               // 清首发现记录 → 验「本次抵达内扫描→真发现」而非残留
+            discoveryService.ReSyncFromGenerator();
+            var scan = oreScanner.ScanAndReportAround(grid.GridToWorld(atCell.x, atCell.y));
+            Assert(scan.discovery != null && scan.discovery.hasSignal
+                   && scan.discovery.type == DiscoveryNodeType.AbandonedMiningPocket
+                   && scan.discovery.description != null && scan.discovery.description.Contains("废弃"),
+                "SLICE_4_ScanAnomaly", "正式扫描在真实抵达格收到 A 废弃采矿点模糊异常");
+            Assert(scan.discovery != null && scan.discovery.isDiscovered,
+                "SLICE_4_ScanFound", "实际抵达(discoveryRadius 内)后扫描 isDiscovered=true（模糊发现成立）");
+
+            // ---- 5. 遭遇 + 决策：A 节点 = 奖励矿与 SupportRock 风险取舍；玩家选择【先取奖励、保承重柱】----
+            Assert(node.riskCells.Count >= 1 && node.rewardCells.Count >= 1, "SLICE_5_AStructure", "A 节点含风险(SupportRock) + 奖励矿");
+            bool supportFound = false; Vector2Int supportCell = Vector2Int.zero;
+            for (int i = 0; i < node.riskCells.Count; i++)
+            {
+                var t = grid.GetTile(node.riskCells[i].x, node.riskCells[i].y);
+                if (t != null && t.blockType == BlockType.SupportRock) { supportFound = true; supportCell = node.riskCells[i]; break; }
+            }
+            Assert(supportFound, "SLICE_5_HasSupport", "A 节点确有 SupportRock 承重柱（决策对象）");
+            if (!supportFound) { if (gm.Upgrades != null) gm.Upgrades.drillLevel = prevMode; yield break; }
+            // 玩家决策 = 不动 SupportRock，只取奖励矿入 Cargo：
             int cargoBefore = vehicle.CargoValue;
-            var rewardCell = node.rewardCells.Count > 0 ? node.rewardCells[0] : sc;
+            bool tookAny = false;
+            var rewardCell = node.rewardCells.Count > 0 ? node.rewardCells[0] : supportCell;
             var rw = grid.GetTile(rewardCell.x, rewardCell.y);
             if (rw != null && rw.isSolid && rw.value > 0)
-                vehicle.TryDigHit(rewardCell);
+            {
+                for (int i = 0; i < 8 && !tookAny; i++)   // 多击到 Broken（矿可能多耐久），drill=5 ≥ 硬度
+                {
+                    var r = vehicle.TryDigHit(rewardCell);
+                    tookAny = r == DigHitResult.Hit || r == DigHitResult.Broken;
+                    if (r == DigHitResult.Broken) break;
+                    if (r == DigHitResult.NotSolid) break;
+                }
+            }
             int cargoAfter = vehicle.CargoValue;
-            Assert(cargoAfter > cargoBefore, "SLICE_6_Reward_ToCargo",
-                "挖掘文明奖励 → Cargo 增加（真实 HandleTileDug 入包路径）");
+            Assert(cargoAfter > cargoBefore && tookAny, "SLICE_5_TakeReward_ToCargo",
+                "先取奖励矿入 Cargo（真实 HandleTileDug 入包，Cargo 增加）");
+            // 保 SupportRock 未拆 → 承重柱仍在原位（本 slice 的“安全决策”未触发坍塌）。
+            // 注：不断言全局 collapse 计数——A/D 组件测试已先 DebugTriggerCheck 残留状态；此处只证「本决策没动承重柱」。
+            var supTile = grid.GetTile(supportCell.x, supportCell.y);
+            Assert(supTile != null && supTile.blockType == BlockType.SupportRock && grid.IsSolid(supportCell.x, supportCell.y),
+                "SLICE_5_NoCollapse_Safe", "未拆 SupportRock → 承重柱原封未动（“先取矿后拆柱”安全决策成立）");
 
-            // ---- 7. 返航地表 ----
-            Vector2Int surfaceCell = new Vector2Int(grid.Width / 2, 1); // 地表坑口
-            vehicle.transform.position = grid.GridToWorld(surfaceCell.x, surfaceCell.y);
-            yield return null;
-            Assert(!vehicle.IsDead, "SLICE_7_ReturnSurface", "带 Cargo 返航地表（存活）");
+            // ---- 6. 带货真实返航：沿已挖开的巷道原路驶回 spawn 所在行（先水平回竖井，再沿竖井上行；均不 teleport）----
+            Vector2Int shaftCell = new Vector2Int(shaftX, approach.y);   // 回到竖井底部（走已开的 2 格高横巷）
+            var legBackH = new SliceLeg();
+            yield return DriveAlong(shaftCell, legBackH);
+            if (!legBackH.done) { Assert(false, "SLICE_6_ReturnHoriz", "真实返航(水平回竖井)失败"); if (gm.Upgrades != null) gm.Upgrades.drillLevel = prevMode; yield break; }
+            // 竖井仅 1 列宽：先让载具精确回到竖井格中心，再上行（1 列宽 + 载具角点会卡到侧壁；居中方可通过）
+            var legCenter = new SliceLeg();
+            yield return CenterOnCell(shaftCell, legCenter);
+            if (!legCenter.done) { Assert(false, "SLICE_6_CenterShaft", "返航前无法回中竖井格"); if (gm.Upgrades != null) gm.Upgrades.drillLevel = prevMode; yield break; }
+            var legUp = new SliceLeg();
+            yield return DriveAlong(new Vector2Int(shaftX, startCell.y), legUp);   // 沿竖井上行回 spawn 行
+            if (!legUp.done) { Assert(false, "SLICE_6_ReturnUp", "真实返航(沿竖井上行)到地表行失败"); if (gm.Upgrades != null) gm.Upgrades.drillLevel = prevMode; yield break; }
+            // 返航后需处于 spawn 所在坑口(centerX)；shaftX 即 spawn 列(center)，故回程竖井列已回到 spawn.x。
+            Vector2Int homeCell = new Vector2Int(startCell.x, startCell.y);
+            Vector2Int atBack = grid.WorldToGrid(vehicle.transform.position);
+            if (atBack.x != homeCell.x)   // 一般不会走到：竖井即 spawn 列。兜底才横向挖/驶回坑口
+            {
+                int lx = System.Math.Min(atBack.x, homeCell.x), rx = System.Math.Max(atBack.x, homeCell.x);
+                for (int x = lx; x <= rx; x++)
+                    if (grid.InBounds(x, startCell.y) && grid.IsSolid(x, startCell.y))
+                    {
+                        var cr = CarveOpen(x, startCell.y);
+                        if (cr != DigHitResult.Broken) { Assert(false, "SLICE_6_CarveHome", "返航回 spawn 横向挖不穿"); if (gm.Upgrades != null) gm.Upgrades.drillLevel = prevMode; yield break; }
+                    }
+                var legHome = new SliceLeg();
+                yield return DriveAlong(homeCell, legHome);
+                if (!legHome.done) { Assert(false, "SLICE_6_ReturnHome", "真实驶回 spawn 失败"); if (gm.Upgrades != null) gm.Upgrades.drillLevel = prevMode; yield break; }
+            }
+            // SellTerminal.TrySell 为脚本可直接调用的真实结算入口（等价玩家按 E，无范围要求），故返航到坑口即可结算。
+            Assert(Manhattan(grid.WorldToGrid(vehicle.transform.position), homeCell) <= 2,
+                "SLICE_6_ReturnSurface", "带 Cargo 真实返航地表坑口（无瞬移，grid 格逐段推进）");
+            Assert(!vehicle.IsDead, "SLICE_6_Alive_AfterReturn", "带货真实返航地表后载具存活");
+            Assert(sliceNoTeleport, "SLICE_6_NoTeleport", "返航全程 grid 格单步位移 ≤1（无 transform.position 跳点）");
+            if (!sliceNoTeleport) { if (gm.Upgrades != null) gm.Upgrades.drillLevel = prevMode; yield break; }
 
-            // ---- 8. Sell 结算 → Run 结束 ----
+            // ---- 7. Sell 结算 → Run 结束 ----
             int cashBefore = gm.Cash;
             var sellTerminal = FindFirstObjectByType<SellTerminal>();
             int earned = 0;
             if (sellTerminal != null && vehicle.CargoValue > 0)
                 earned = sellTerminal.TrySell(vehicle);
-            Assert(earned > 0 && gm.Cash >= cashBefore, "SLICE_8_Sell", $"SellTerminal.TrySell 结算 +${earned}（Cargo 清空、Cash 增加）");
-            Assert(gm.RunRisk != null && !gm.RunRisk.RunActive, "SLICE_9_RunEnd",
+            Assert(earned > 0 && gm.Cash >= cashBefore, "SLICE_7_Sell", $"SellTerminal.TrySell 结算 +${earned}（Cargo 清空、Cash 增加）");
+            Assert(gm.RunRisk != null && !gm.RunRisk.RunActive, "SLICE_8_RunEnd",
                 "Sell 后 RunRiskState 结束本 Run（RunActive=false，Run 生命周期收官）");
+            if (gm.Upgrades != null) gm.Upgrades.drillLevel = prevMode;
         }
+
+        // ---------- Blocker3 工具 ----------
+
+        static int Manhattan(Vector2Int a, Vector2Int b) => System.Math.Abs(a.x - b.x) + System.Math.Abs(a.y - b.y);
+
+        IEnumerator NullFrame(float sec)
+        {
+            float t0 = Time.time;
+            while (Time.time - t0 < sec) yield return null;
+        }
+
+        /// <summary>真实挖穿一格（循环 TryDigHit 直到 Broken）。TryDigHit 无距离限制 → 控制性挖掘，等价玩家按住敲击。</summary>
+        DigHitResult CarveOpen(int x, int y)
+        {
+            if (!grid.InBounds(x, y)) return DigHitResult.NotSolid;
+            if (!grid.IsSolid(x, y)) return DigHitResult.Broken;   // 已空 = 视为已挖穿
+            int guard = 0;
+            DigHitResult last = DigHitResult.Hit;
+            while (guard++ < 24)
+            {
+                last = vehicle.TryDigHit(new Vector2Int(x, y));
+                if (last == DigHitResult.Broken) return last;
+                if (last != DigHitResult.Hit) return last;           // NotSolid/HardnessLow/Sealed/Overheated 中止
+            }
+            return last;
+        }
+
+        /// <summary>
+        /// 让载具以真实物理(Hover 直驱)逐格驶向 target，直到其 grid 格 == target。
+        /// 每帧只在朝向 target 的轴给 DebugDriveInput（与真实按键同源：ReadInput→FixedUpdate），到位即清输入。
+        /// 防线：记录前格，单帧 grid 位移若 >1 → sliceNoTeleport=false（瞬移跳变）。
+        /// Hover 被实心岩阻挡：若前方没被 CarveOpen 挖空，将卡住直到帧数耗尽 → leg.done=false。
+        /// 迭代器协程不能带 ref/out 参数 → 完成与否经可变 holder leg 传回。
+        /// </summary>
+        IEnumerator DriveAlong(Vector2Int target, SliceLeg leg)
+        {
+            leg.done = false;
+            int stall = 0;
+            Vector2Int prev = grid.WorldToGrid(vehicle.transform.position);
+            while (stall < 1200)   // 1200 fixed 帧 ≈ 20s 上限；单程多格足够（挖开后一格仅需数帧）
+            {
+                Vector2Int now = grid.WorldToGrid(vehicle.transform.position);
+                if (now == target)
+                {
+                    leg.done = true;
+                    if (miningFeel != null) miningFeel.DebugDriveInput(Vector2.zero, false);
+                    yield break;
+                }
+                if (Manhattan(now, prev) > 1) sliceNoTeleport = false;   // 单步 >1 格 = 瞬移/穿透
+                prev = now;
+                Vector2Int d = target - now;
+                Vector2 drive = System.Math.Abs(d.x) > System.Math.Abs(d.y)
+                    ? new Vector2(System.Math.Sign(d.x), 0f)
+                    : new Vector2(0f, System.Math.Sign(d.y));
+                // grid y 向下为正；Hover 用世界轴（世界 y 上为正）→ grid 下潜 = 世界 y 负 → drive.y 取反
+                Vector2 worldDrive = new Vector2(drive.x, -drive.y);
+                if (miningFeel != null) miningFeel.DebugDriveInput(worldDrive, false);
+                yield return new WaitForFixedUpdate();
+                stall++;
+            }
+            if (miningFeel != null) miningFeel.DebugDriveInput(Vector2.zero, false);
+        }
+
+        /// <summary>把载具精确回中到某格中心（世界坐标），保证穿 1 列宽竖井时角点不卡侧壁。done=是否回中。</summary>
+        IEnumerator CenterOnCell(Vector2Int cell, SliceLeg leg)
+        {
+            leg.done = false;
+            Vector3 center = grid.GridToWorld(cell.x, cell.y);
+            int stall = 0;
+            while (stall < 600)   // 10s 上限
+            {
+                Vector3 p = vehicle.transform.position;
+                float dx = center.x - p.x;
+                float dy = center.y - p.y;
+                if (Mathf.Abs(dx) < 0.05f && Mathf.Abs(dy) < 0.05f)
+                {
+                    leg.done = true;
+                    if (miningFeel != null) miningFeel.DebugDriveInput(Vector2.zero, false);
+                    yield break;
+                }
+                Vector2 worldDrive = new Vector2(Mathf.Clamp(dx, -1f, 1f), Mathf.Clamp(dy, -1f, 1f));
+                if (miningFeel != null) miningFeel.DebugDriveInput(worldDrive, false);
+                yield return new WaitForFixedUpdate();
+                stall++;
+            }
+            if (miningFeel != null) miningFeel.DebugDriveInput(Vector2.zero, false);
+        }
+
+        /// <summary>DriveAlong 的完成标志 holder（可变引用传参，规避迭代器 ref 限制）。</summary>
+        sealed class SliceLeg { public bool done; }
 
         void Assert(bool ok, string tag, string msg)
         {
