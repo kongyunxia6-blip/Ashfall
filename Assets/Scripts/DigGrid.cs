@@ -52,6 +52,10 @@ namespace Ashfall
                  "为空 = 维持旧行为，旧场景逐字节零回归。")]
         public RuinGenerator ruinGenerator;
 
+        [Tooltip("DEV-014：非空时：在 Ruin pass 之后叠加地下发现节点 pass（轻量组合既有系统的 placement pass，" +
+                 "生成顺序 = Base → Space → Vein → Ruin → DiscoveryNode）。为空 = 旧行为零回归。")]
+        public DiscoveryNodeGenerator discoveryNodeGenerator;
+
         TileDefinition[,] grid;
         Tile solidTile;
         Grid layoutGrid;
@@ -151,6 +155,8 @@ namespace Ashfall
             bool spaceMode = undergroundSpaceGenerator != null && undergroundSpaceGenerator.isActiveAndEnabled;
             // DEV-013：启用遗迹时，在 vein pass 之后叠加 ruin pass（后置覆盖落点）
             bool ruinMode = ruinGenerator != null && ruinGenerator.isActiveAndEnabled;
+            // DEV-014：启用发现节点时，在 ruin pass 之后叠加 discovery pass（轻量组合既有系统；禁推翻本链）
+            bool discoveryMode = discoveryNodeGenerator != null && discoveryNodeGenerator.isActiveAndEnabled;
 
             for (int y = 0; y < depth; y++)
             {
@@ -208,6 +214,11 @@ namespace Ashfall
             // 与矿脉/洞穴不互相覆盖竞争 —— 明确顺序由本方法集中定义）。
             if (ruinMode)
                 ruinGenerator.ApplyToGrid(this);
+
+            // DEV-014：发现节点 pass（可选；在遗迹 pass 之后、整图刷新前。轻量 Composer 复用
+            // 现有生成器的成果 + reserved/ruin bounds 避让，不推翻 Base→Space→Vein→Ruin 顺序）。
+            if (discoveryMode)
+                discoveryNodeGenerator.ApplyToGrid(this);
 
             RefreshAll();
         }
