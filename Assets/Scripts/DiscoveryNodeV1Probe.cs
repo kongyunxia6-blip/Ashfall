@@ -52,6 +52,14 @@ namespace Ashfall
 
         IEnumerator Start()
         {
+            // Blocker3 第三轮：给 RunRiskState 一个「玩家处地表 Hub → 不自动开 Run」的干净基线。
+            // 本验收场景没有 SurfaceHubZone 触发器（DEV-011 正式规则里 IsAtSurface 的唯一权威来源），
+            // 若不预先置 true，RunRiskState.LateUpdate 会在帧 0 就因 !IsAtSurface&&!RunActive 幽灵自启一个 Run，
+            // 使 VerticalSlice 无法演示「真实离地 → 状态机自启」。
+            // 同步执行（在本协程首个 yield 之前）以早于帧 0 的 LateUpdate；载具出生即在地表坑口 → IsAtSurface=true。
+            var gmSync = GameManager.Instance;
+            if (gmSync != null) gmSync.IsAtSurface = true;
+
             Debug.Log("[DEV-014] Probe Start: running...");
             yield return new WaitForSeconds(1f);
 
@@ -582,9 +590,18 @@ namespace Ashfall
             Assert(!vehicle.IsDead, "SLICE_0_Alive", "载具存活（隔离本 slice）");
             if (vehicle.IsDead) { if (gm.Upgrades != null) gm.Upgrades.drillLevel = prevMode; yield break; }
 
-            // ---- 2. Run 开始（离开地表）----
-            gm.RunRisk.BeginRun();
-            Assert(gm.RunRisk.RunActive, "SLICE_2_RunStart", "BeginRun → RunActive=true（Run 已开启）");
+            // ---- 2. 离地表前的基线：玩家处地表 Hub（IsAtSurface=true）→ Run 尚未由状态机开启 ----
+            //   Blocker3 第三轮：不再直接调 gm.RunRisk.BeginRun()（那会绕过 DEV-011 正式规则）。正式规则是
+            //   RunRiskState.LateUpdate 里「!IsAtSurface && !RunActive → BeginRun」，即玩家真正离开地表后由
+            //   状态机自己在真实帧开新 Run。故这里只记录基线：载具仍在地表 → RunActive 必须为 false、
+            //   RunNumber 不因探针调用而变化（证明状态机未在地表自启，也没被手动开）。
+            gm.IsAtSurface = true;                       // 基线：玩家在地表坑口（出生即地表），Sell 前都保持
+            int runNoAtSurface = gm.RunRisk.RunNumber;
+            Assert(!gm.RunRisk.RunActive, "SLICE_2_Surface_NoRun",
+                $"离地表前（IsAtSurface=true）：RunActive=false（状态机未在地表自启），RunNumber={runNoAtSurface}");
+            yield return NullFrame(0.1f);                // 跨若干真实帧仍应稳定不误自启
+            Assert(gm.RunRisk.RunNumber == runNoAtSurface && !gm.RunRisk.RunActive,
+                "SLICE_2_StaySurface_Stable", $"停留地表跨帧不误开 Run：RunNumber={gm.RunRisk.RunNumber} RunActive={gm.RunRisk.RunActive}");
 
             // ---- 3. 真实下矿：挖通从当前格到「节点上方一格 approach」的 L 形真实巷道并逐格驶入 ----
             Vector2Int approach = new Vector2Int(node.bounds.xMin + node.bounds.width / 2, node.bounds.yMin - 1);
@@ -604,6 +621,20 @@ namespace Ashfall
                     if (r != DigHitResult.Broken) { Assert(false, "SLICE_3_CarveDown", $"({shaftX},{y}) 挖不穿 res={r}"); if (gm.Upgrades != null) gm.Upgrades.drillLevel = prevMode; yield break; }
                 }
             }
+            // ---- 2b. 真正离开地表 → RunRiskState 状态机自己开 Run（非探针手动 BeginRun）----
+            //   竖井已挖通，载具即将沿竖井下潜离开地表带。此时拨动官方离地表信号 IsAtSurface=false
+            //   （等效真实地表 Hub 触发器 SurfaceHubZone 在载具离场时置 false；本场景无该触发器故由探针拨动，
+            //    与 DEV-011 探针一致——DEV-011 也以 IsAtSurface 官方杠杆驱动、从不直接调 BeginRun）。
+            //   随后等一个真实 EndOfFrame：RunRiskState.LateUpdate 侦测到 !IsAtSurface && !RunActive → 自己 BeginRun。
+            //   断言：RunActive==true 且 RunNumber 恰比基线 +1 —— 证明是状态机在离地真实帧自启，而非探针手动开始。
+            gm.IsAtSurface = false;
+            yield return new WaitForEndOfFrame();
+            yield return new WaitForEndOfFrame();        // 双帧保险：确保 LateUpdate 至少一次见到离地表状态
+            Assert(gm.RunRisk.RunActive, "SLICE_2_Run_AutoStart",
+                $"真实离地后 RunRiskState 状态机自启（未调 BeginRun）→ RunActive=true，RunNumber={gm.RunRisk.RunNumber}");
+            Assert(gm.RunRisk.RunNumber == runNoAtSurface + 1, "SLICE_2_RunNumber_Incremented",
+                $"状态机离地自启使 RunNumber 恰 +1：{runNoAtSurface} → {gm.RunRisk.RunNumber}（证明非手动 BeginRun 直接调用）");
+
             //     竖直驶入到 approach.y 那一行
             var legDown = new SliceLeg();
             yield return DriveAlong(new Vector2Int(shaftX, approach.y), legDown);
@@ -710,22 +741,60 @@ namespace Ashfall
                 yield return DriveAlong(homeCell, legHome);
                 if (!legHome.done) { Assert(false, "SLICE_6_ReturnHome", "真实驶回 spawn 失败"); if (gm.Upgrades != null) gm.Upgrades.drillLevel = prevMode; yield break; }
             }
-            // SellTerminal.TrySell 为脚本可直接调用的真实结算入口（等价玩家按 E，无范围要求），故返航到坑口即可结算。
             Assert(Manhattan(grid.WorldToGrid(vehicle.transform.position), homeCell) <= 2,
                 "SLICE_6_ReturnSurface", "带 Cargo 真实返航地表坑口（无瞬移，grid 格逐段推进）");
             Assert(!vehicle.IsDead, "SLICE_6_Alive_AfterReturn", "带货真实返航地表后载具存活");
             Assert(sliceNoTeleport, "SLICE_6_NoTeleport", "返航全程 grid 格单步位移 ≤1（无 transform.position 跳点）");
             if (!sliceNoTeleport) { if (gm.Upgrades != null) gm.Upgrades.drillLevel = prevMode; yield break; }
 
-            // ---- 7. Sell 结算 → Run 结束 ----
-            int cashBefore = gm.Cash;
+            // 回到地表坑口 = 重新进入地表 Hub → IsAtSurface 拨回 true；此时 Run 仍在进行（未 Sell），
+            // 且状态机不得因回地表而误开新 Run（需 Sell 结算才结束当前 Run）。
+            gm.IsAtSurface = true;
+            yield return new WaitForEndOfFrame();
+            Assert(gm.RunRisk.RunActive && gm.RunRisk.RunNumber == runNoAtSurface + 1,
+                "SLICE_6_BackHub_NoNewRun",
+                $"回地表 Hub（IsAtSurface=true）：Run 仍进行中（RunActive=true, Run#{gm.RunRisk.RunNumber}），不误开新 Run");
+
+            // ---- 7. 真实驶入 SellTerminal 触发器 → PlayerInRange=true → 出售 → Run 结束 ----
+            //   Blocker3 第三轮：不再停在坑口就直接 TrySell（那只能证明结算函数能用，无法证明玩家真实驶入了终端范围）。
+            //   改为：真实沿地表驶入终端 Trigger（物理 Overlap），等 OnTriggerEnter2D 触发后断言
+            //   SellTerminal.PlayerInRange==true，再走终端 Update 同款结算入口 TrySell。
             var sellTerminal = FindFirstObjectByType<SellTerminal>();
+            Assert(sellTerminal != null, "SLICE_7_HasTerminal", "场景中存在 SellTerminal（真实出售终端）");
+            int cashBefore = gm.Cash;
             int earned = 0;
-            if (sellTerminal != null && vehicle.CargoValue > 0)
-                earned = sellTerminal.TrySell(vehicle);
-            Assert(earned > 0 && gm.Cash >= cashBefore, "SLICE_7_Sell", $"SellTerminal.TrySell 结算 +${earned}（Cargo 清空、Cash 增加）");
+            if (sellTerminal != null)
+            {
+                // 终端触发器中心所在格；沿 spawn 行从当前位置真实驶入终端下方并回中其格心（物理 Overlap 进 Trigger）
+                Vector2Int stCell = grid.WorldToGrid(sellTerminal.transform.position);
+                Vector2Int fromHere = grid.WorldToGrid(vehicle.transform.position);
+                int sl = System.Math.Min(fromHere.x, stCell.x), sr = System.Math.Max(fromHere.x, stCell.x);
+                for (int x = sl; x <= sr; x++)                     // 若行上实心格挡路则挖开（地表土/矿可挖）
+                    if (grid.InBounds(x, homeCell.y) && grid.IsSolid(x, homeCell.y))
+                    {
+                        var cr = CarveOpen(x, homeCell.y);
+                        if (cr != DigHitResult.Broken) { Assert(false, "SLICE_7_CarveToTerminal", $"({x},{homeCell.y}) 驶向终端挖不穿 res={cr}"); break; }
+                    }
+                var legToTerm = new SliceLeg();
+                yield return DriveAlong(stCell, legToTerm);
+                if (legToTerm.done)
+                {
+                    var legCenterTerm = new SliceLeg();
+                    yield return CenterOnCell(stCell, legCenterTerm);   // 居中到终端格心 → 物理进 Trigger
+                }
+                yield return new WaitForEndOfFrame();                 // 让 OnTriggerEnter2D → presence.Enter 落地
+                yield return new WaitForEndOfFrame();
+                // PlayerInRange 由 HubZoneTracker 权威：任一 Sell 终端在场计数 >0 = 玩家真实在触发范围内
+                Assert(SellTerminal.PlayerInRange, "SLICE_7_PlayerInRange",
+                    $"真实驶入终端 Trigger 后 PlayerInRange=true（载具格={grid.WorldToGrid(vehicle.transform.position)}，终端格={stCell}）");
+                // 走终端 Update 同款入口：presence.Present 已成立时 TrySell == 玩家按 E（结算路径一致）
+                if (SellTerminal.PlayerInRange && vehicle.CargoValue > 0)
+                    earned = sellTerminal.TrySell(vehicle);
+            }
+            Assert(earned > 0 && gm.Cash >= cashBefore, "SLICE_7_Sell",
+                $"真实终端范围内出售 +${earned}（Cargo 清空、Cash 增加），非坑口直调");
             Assert(gm.RunRisk != null && !gm.RunRisk.RunActive, "SLICE_8_RunEnd",
-                "Sell 后 RunRiskState 结束本 Run（RunActive=false，Run 生命周期收官）");
+                "出售后 RunRiskState 结束本 Run（RunActive=false，本 Run 生命周期收官）");
             if (gm.Upgrades != null) gm.Upgrades.drillLevel = prevMode;
         }
 
