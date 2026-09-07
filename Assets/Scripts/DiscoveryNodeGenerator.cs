@@ -148,7 +148,9 @@ namespace Ashfall
                 int y0 = yMin + rng.Next(0, System.Math.Max(1, yMax - yMin + 1));
 
                 if (OverlapsAny(x0, y0, w, h, protect)) continue;
-                if (FootprintNotPlainRock(x0, y0, w, h, placedCells)) continue;
+                // 注意：FootprintNotPlainRock 实测返回 true == 该 footprint 全部为可覆盖的
+                // 实心普通岩（value==0、非保留/未占用），即「可落点」。故此处取反：非纯岩才跳过。
+                if (!FootprintNotPlainRock(x0, y0, w, h, placedCells)) continue;
 
                 // 整节点原子提交：先规划（该类型的 layout），再校验与写。
                 var inst = new DiscoveryNodeInstance
@@ -288,7 +290,10 @@ namespace Ashfall
             {
                 int hx = x0, hyMid = y0 + h / 2;
                 TryAdd(plan, hx, hyMid, hotRockTile); TryAdd(inst.riskCells, hx, hyMid);
-                if (h >= 2) { TryAdd(plan, hx, y0 + 1, hotRockTile); TryAdd(inst.riskCells, hx, y0 + 1); }
+                // 热岩#2：取腔室底部行 y0+h-1；当 h/2 == h-1（即 h==2）时与 hyMid 重合，
+                // 跳过以免写入重复格 —— TryCommit 会把「节点内重复格」判非法而整节点拒绝。
+                int hyBot = y0 + h - 1;
+                if (hyBot != hyMid) { TryAdd(plan, hx, hyBot, hotRockTile); TryAdd(inst.riskCells, hx, hyBot); }
             }
             if (reward != null)
             {
