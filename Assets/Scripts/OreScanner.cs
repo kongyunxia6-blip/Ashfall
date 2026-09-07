@@ -137,6 +137,13 @@ namespace Ashfall
                  "但同一个扫描动作都能得到文明异常信号。")]
         public RuinDiscoveryService ruinDiscovery;
 
+        [Header("DEV-014：地下发现节点异常信号（分层接入玩家扫描动作）")]
+        [Tooltip("可选。非空时：玩家每次按扫描键，在扫矿 + 文明信号之后同步查询最近 Discovery Node 的\n" +
+                 "模糊异常信号（abandoned/thermal/ancient/unstable），合入同一句反馈 —— 资源扫描(OreScanner)与\n" +
+                 "文明扫描(RuinDiscoveryService)/节点扫描(DiscoveryNodeDiscoveryService)职责分层，但同一个扫描动作\n" +
+                 "都能得到三种线索。不泄露节点 bounds/rewardCells（模糊信号非透视）。")]
+        public DiscoveryNodeDiscoveryService discoveryNodeDiscovery;
+
         DigGrid grid;
         DrillVehicle vehicle;
 
@@ -145,6 +152,9 @@ namespace Ashfall
 
         /// <summary>最近一次扫描联动得到的遗迹信号（未扫/未配 discovery 为 null；供 HUD/测试断言）。</summary>
         public RuinSignalResult LastRuinSignal { get; private set; }
+
+        /// <summary>最近一次扫描联动得到的发现节点信号（未扫/未配 discoveryNodeDiscovery 为 null）。</summary>
+        public DiscoverySignalResult LastDiscoverySignal { get; private set; }
 
         void Awake()
         {
@@ -167,21 +177,22 @@ namespace Ashfall
 
             var result = ScanAndReportAround(vehicle.transform.position);
             if (surfaceToServiceMessage && GameManager.Instance != null)
-                GameManager.Instance.LastServiceMessage = ComposeCombinedMessage(result.ore, result.ruin);
-            Debug.Log("[OreScanner] " + ComposeCombinedMessage(result.ore, result.ruin));
+                GameManager.Instance.LastServiceMessage = ComposeCombinedMessage(result.ore, result.ruin, result.discovery);
+            Debug.Log("[OreScanner] " + ComposeCombinedMessage(result.ore, result.ruin, result.discovery));
         }
 
-        /// <summary>单次扫描的联动结果（矿 + 遗迹信号）。</summary>
+        /// <summary>单次扫描的联动结果（矿 + 遗迹信号 + 发现节点信号）。</summary>
         public struct ScanOutcome
         {
             public OreScanResult ore;
             public RuinSignalResult ruin;
+            public DiscoverySignalResult discovery;
         }
 
         /// <summary>
-        /// DEV-013：正式的「扫描动作」运行时闭环 —— 以世界坐标为中心扫矿，并（若配了 ruinDiscovery）
-        /// 同步查询文明异常信号。这是 OreScanner.Update（R 键）与验收探针共同走的唯一真实入口；
-        /// 测试探针不再直接手动 RegisterAll/调 discovery.ScanRuinAround 来验证接线。
+        /// DEV-013/DEV-014：正式的「扫描动作」运行时闭环 —— 以世界坐标为中心扫矿，并（若配了 ruinDiscovery /
+        /// discoveryNodeDiscovery）同步查询文明异常信号与发现节点异常信号。这是 OreScanner.Update（R 键）与
+        /// 验收探针共同走的唯一真实入口；测试探针不再直接手动 RegisterAll/调 discovery.Scan*Around 来验证接线。
         /// </summary>
         public ScanOutcome ScanAndReportAround(Vector3 worldPos)
         {
@@ -191,17 +202,23 @@ namespace Ashfall
             LastRuinSignal = null;
             if (ruinDiscovery != null)
                 LastRuinSignal = ruinDiscovery.ScanRuinAround(center);
-            return new ScanOutcome { ore = ore, ruin = LastRuinSignal };
+            LastDiscoverySignal = null;
+            if (discoveryNodeDiscovery != null)
+                LastDiscoverySignal = discoveryNodeDiscovery.ScanDiscoveryAround(center);
+            return new ScanOutcome { ore = ore, ruin = LastRuinSignal, discovery = LastDiscoverySignal };
         }
 
-        /// <summary>把矿 + 遗迹信号合成一句 HUD 消息（各自保持只读，纯文本）。</summary>
-        public string ComposeCombinedMessage(OreScanResult ore, RuinSignalResult ruin)
+        /// <summary>把矿 + 遗迹信号 + 节点信号合成一句 HUD 消息（各自保持只读，纯文本）。</summary>
+        public string ComposeCombinedMessage(OreScanResult ore, RuinSignalResult ruin, DiscoverySignalResult discovery)
         {
             string mineral = ore != null ? ore.Summary : "";
             string anomaly = ruin != null && ruin.hasSignal ? ruin.description : "";
-            if (anomaly.Length > 0)
-                return mineral + (mineral.Length > 0 ? "  |  " : "") + anomaly;
-            return mineral;
+            string node = discovery != null && discovery.hasSignal ? discovery.description : "";
+            var parts = new List<string>();
+            if (mineral.Length > 0) parts.Add(mineral);
+            if (anomaly.Length > 0) parts.Add(anomaly);
+            if (node.Length > 0) parts.Add(node);
+            return string.Join("  |  ", parts);
         }
 
         /// <summary>以世界坐标为中心扫描（转网格坐标后调 ScanAt）。半径 = 基础 + 外部加成（只读）。</summary>

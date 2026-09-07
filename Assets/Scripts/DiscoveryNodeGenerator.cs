@@ -8,20 +8,24 @@ namespace Ashfall
     /// 轻量 Composer + placement pass】。
     ///
     /// 职责：
-    ///  - 依附现有 DigGrid，只经 DigGrid.SetTile(x,y,tile,durability) 落图（不建第二套 Grid）；
+    ///  - 依附现有 DigGrid，只经 DigGrid.SetTile / OreVeinGenerator.PlantRewardVein 落图（不建第二套 Grid）；
     ///  - 在 DigGrid.Generate 的 Ruin pass 之后、RefreshAll 之前由 DigGrid 调用（生成顺序集中定义，
     ///    不推翻 Base→Space→Vein→Ruin）；
     ///  - 确定性：seed = seedOverride>=0 ? seedOverride : grid.seed，用 new System.Random(EffectiveSeed)，
     ///    绝不碰 UnityEngine.Random（保证同 seed 反复生成逐格一致）；
     ///  - 保留避让：自己的 reservedRects + 若 grid.ruinGenerator 存在，把每个 RuinInstance.bounds 外扩
     ///    1 格转保留区 → 不覆盖/破坏 AncientRelayRoom；
-    ///  - 原子提交：每个节点先「规划全部格 → 全格合法性校验」→ 全过才一次性 SetTile 提交并登记
-    ///    DiscoveryNodeInstance；任一步非法则整节点丢弃（rollback，绝不写半个节点）；
+    ///  - 原子提交：每个节点先「规划全部结构格 → 校验合法 → 落结构 → 经 OreVeinGenerator 种+登记奖励矿」；
+    ///    任一步失败则整节点回滚（恢复结构格原 tile），绝不写半个节点；
+    ///  - 【Blocker2 修复】A/B/D 的奖励矿不再由注入的独立 reward tile 手工 SetTile，而是经
+    ///    grid.oreVeinGenerator.PlantRewardVein 在节点奖励区种一条【真实矿脉】并登记进 Veins ——
+    ///    奖励走现有 vein 系统（连通/账实/统计一致），无第二个手工矿源；结构块（SupportRock/LooseRock/
+    ///    HotRock）落在奖励区之外的纯地层格，绝不覆盖已有 vein/space；
     ///  - 四类节点只组合现有系统反应：A/D 走 BlockCollapseSystem（SupportRock→LooseRock）、B 走
     ///    HotRockSystem + HasCapability(Cooling)、C 走 RuinSealSystem + HasCapability(RuinAccess) +
     ///    InventoryGrid/HandleTileDug。本类不持有第二套 collapse/heat/capability/ruin/奖励系统。
     ///
-    /// 挂载：任意物体（常与 DigGrid 同物体）。由场景 Builder 注入 tile 引用与 reservedRects，
+    /// 挂载：任意物体（常与 DigGrid 同物体）。由场景 Builder 注入结构 tile、oreVeinSource 与 reservedRects，
     /// 并赋给 digGrid.discoveryNodeGenerator 后 RegenerateFromDatabase()。
     /// </summary>
     public class DiscoveryNodeGenerator : MonoBehaviour
@@ -38,7 +42,7 @@ namespace Ashfall
         [Tooltip("每轮最多尝试多少个候选锚点后放弃（防死循环）。")]
         public int maxPlacementAttempts = 64;
 
-        // ---- 节点用到的 tile（Builder 注入真实 .asset；null 时对应节点跳过） ----
+        // ---- 结构 / 环境 tile（Builder 注入真实 .asset；null 时对应节点跳过） ----
 
         [Header("结构 / 环境 tile")]
         [Tooltip("承重岩（A/D）。null → 对应节点不铺支撑结构。")]
@@ -50,16 +54,15 @@ namespace Ashfall
         [Tooltip("遗迹封印门（C）。null → C 节点不铺。")]
         public TileDefinition sealTile;
 
-        [Header("奖励 tile（按区域注入；null → 对应区域节点奖励跳过）")]
-        [Tooltip("Shallow 高值矿（A/D 奖励）。")]
-        public TileDefinition rewardShallow;
-        [Tooltip("Mid 高值矿（B/D 奖励）。")]
-        public TileDefinition rewardMid;
-        [Tooltip("Deep 高值矿（A/B 奖励）。")]
-        public TileDefinition rewardDeep;
-        [Tooltip("文明数据碎片（C 奖励）。")]
+        [Header("Blocker2：奖励矿来源（经现有 OreVeinGenerator 种植+登记，避免第二矿源）")]
+        [Tooltip("非空时：A/B/D 的奖励矿由本 OreVeinGenerator.PlantRewardVein 在节点奖励区种真实矿脉并登记。\n" +
+                 "奖励矿种 = 该 region 对应 vein band 里价值最高的矿（复用 band 真实矿池，非新 tile）。\n" +
+                 "为 null 时 A/B/D 只落结构不产奖励（旧场景降级，回归不会崩）。")]
+        public OreVeinGenerator oreVeinSource;
+
+        [Tooltip("C 类文明奖励 tile（非 vein 语义；保留独立注入）。")]
         public TileDefinition ancientDataTile;
-        [Tooltip("古代合金（C 奖励）。")]
+        [Tooltip("C 类文明奖励 tile（非 vein 语义；保留独立注入）。")]
         public TileDefinition ancientAlloyTile;
 
         /// <summary>本次 pass 生成的节点（只读布局；验收查询）。</summary>
@@ -96,6 +99,8 @@ namespace Ashfall
                 LastVerdict = "fail:no_grid_or_db";
                 return false;
             }
+            // Blocker2：奖励矿经现有 OreVeinGenerator；若 grid 上挂了则自动采用
+            if (oreVeinSource == null) oreVeinSource = grid.oreVeinGenerator;
 
             EffectiveSeed = ResolveSeed();
             var rng = new System.Random(EffectiveSeed);
@@ -148,11 +153,11 @@ namespace Ashfall
                 int y0 = yMin + rng.Next(0, System.Math.Max(1, yMax - yMin + 1));
 
                 if (OverlapsAny(x0, y0, w, h, protect)) continue;
-                // 注意：FootprintNotPlainRock 实测返回 true == 该 footprint 全部为可覆盖的
-                // 实心普通岩（value==0、非保留/未占用），即「可落点」。故此处取反：非纯岩才跳过。
-                if (!FootprintNotPlainRock(x0, y0, w, h, placedCells)) continue;
+                // Blocker2：不再要求整 footprint 纯岩。结构区需能落（纯地层格），奖励区可含已有 vein/space；
+                // 结构格不能落在已有 vein/space/特殊块（不覆盖），奖励区在结构区下方独立。
+                if (!StructureRegionPlantable(spec, x0, y0, w, h, placedCells)) continue;
 
-                // 整节点原子提交：先规划（该类型的 layout），再校验与写。
+                // 整节点原子提交：结构 + 奖励矿
                 var inst = new DiscoveryNodeInstance
                 {
                     type = spec.type,
@@ -161,7 +166,7 @@ namespace Ashfall
                 };
                 inst.bounds = new RectInt(x0, y0, w, h);
 
-                bool committed = TryCommit(spec, inst, x0, y0, placedCells);
+                bool committed = TryCommit(spec, inst, x0, y0, rng, placedCells);
                 if (!committed) continue;
 
                 for (int yy = 0; yy < inst.cells.Count; yy++) placedCells.Add(inst.cells[yy]);
@@ -171,22 +176,85 @@ namespace Ashfall
             return placed;
         }
 
-        /// <summary>footprint 内所有格：当前是「普通实心岩（Normal/value0）」且未被已提交节点占用、不在保留区 → 可作为覆盖目标。</summary>
-        bool FootprintNotPlainRock(int x0, int y0, int w, int h, HashSet<Vector2Int> placedCells)
+        /// <summary>
+        /// Blocker2：结构区可落判定。对 A/B/D，结构块只落在「footprint 内、结构带（非奖励区）且当前为
+        /// 纯填充地层格（可覆盖）且未被占用/保留」；奖励区允许已有 vein/space。C 结构即 seal 列，落在纯地层格。
+        /// </summary>
+        bool StructureRegionPlantable(DiscoveryNodeSpec spec, int x0, int y0, int w, int h, HashSet<Vector2Int> placedCells)
         {
-            for (int dy = 0; dy < h; dy++)
-                for (int dx = 0; dx < w; dx++)
-                {
-                    int x = x0 + dx, y = y0 + dy;
-                    if (!grid.InBounds(x, y)) return false;
-                    var t = grid.GetTile(x, y);
-                    // 覆盖目标必须是实心普通岩且无价值（不是矿脉/空格/特殊块）；且未被本 pass 已占用
-                    if (t == null || !t.isSolid || t.blockType != BlockType.Normal || t.value > 0) return false;
-                    if (placedCells.Contains(new Vector2Int(x, y))) return false;
-                }
+            // 结构格集合（与 Plan* 一致）：返回该 footprint 下需要 SetTile 的结构格
+            var structCells = CollectStructureCells(spec, x0, y0, w, h);
+            if (structCells.Count == 0) return false;
+            for (int i = 0; i < structCells.Count; i++)
+            {
+                var c = structCells[i];
+                if (!grid.InBounds(c.x, c.y)) return false;
+                if (placedCells.Contains(c)) return false;
+                var t = grid.GetTile(c.x, c.y);
+                // 结构格必须在实心普通岩 value0（可覆盖），不落在 vein(value>0)/empty/特殊块
+                if (t == null || !t.isSolid || t.blockType != BlockType.Normal || t.value > 0) return false;
+            }
             return true;
         }
 
+        /// <summary>收集某 footprint 下需 SetTile 的结构格（不写、仅计算；供预校验）。</summary>
+        List<Vector2Int> CollectStructureCells(DiscoveryNodeSpec spec, int x0, int y0, int w, int h)
+        {
+            var cells = new List<Vector2Int>();
+            switch (spec.type)
+            {
+                case DiscoveryNodeType.AbandonedMiningPocket:
+                    {
+                        int ry = y0 + h - 1;              // 奖励区在底部（不含结构列）
+                        int cx = x0 + w / 2;              // 中央列
+                        // 承重横梁在奖励区上一行（结构带）；梁上 LooseRock 段
+                        int supY = ry - 1;
+                        if (supY >= y0) { cells.Add(new Vector2Int(cx, supY)); AddCellUnique(cells, cx, supY); }
+                        if (supY - 1 >= y0) { cells.Add(new Vector2Int(cx, supY - 1)); AddCellUnique(cells, cx, supY - 1); }
+                        break;
+                    }
+                case DiscoveryNodeType.ThermalVentChamber:
+                    {
+                        // 左侧热走廊两格（结构带 = 左列），奖励区在右侧/中部
+                        int hyMid = y0 + h / 2;
+                        int hyBot = y0 + h - 1;
+                        cells.Add(new Vector2Int(x0, hyMid)); AddCellUnique(cells, x0, hyMid);
+                        if (hyBot != hyMid) { cells.Add(new Vector2Int(x0, hyBot)); AddCellUnique(cells, x0, hyBot); }
+                        break;
+                    }
+                case DiscoveryNodeType.AncientSignalCache:
+                    {
+                        // seal 门 + 其后文明奖励格（文明 tile 非 vein；全视为结构，一次性落）
+                        int cx = x0 + w / 2, midY = y0 + h / 2;
+                        if (sealTile != null) { cells.Add(new Vector2Int(cx, midY)); AddCellUnique(cells, cx, midY); }
+                        if (h >= 3)
+                        {
+                            if (ancientDataTile != null) { cells.Add(new Vector2Int(cx, midY - 1)); AddCellUnique(cells, cx, midY - 1); }
+                            if (ancientAlloyTile != null) { cells.Add(new Vector2Int(cx, midY + 1)); AddCellUnique(cells, cx, midY + 1); }
+                        }
+                        break;
+                    }
+                case DiscoveryNodeType.CollapsedResourcePocket:
+                    {
+                        // 中央柱：SupportRock（承重）+ 其上 LooseRock（可坍塌）；奖励区在底部
+                        int cx = x0 + w / 2;
+                        int supY = y0 + h - 2;          // 承重在奖励区上方
+                        if (supY >= y0) { cells.Add(new Vector2Int(cx, supY)); AddCellUnique(cells, cx, supY); }
+                        for (int yy = supY - 1; yy >= y0; yy--) { cells.Add(new Vector2Int(cx, yy)); AddCellUnique(cells, cx, yy); }
+                        break;
+                    }
+            }
+            return cells;
+        }
+
+        static void AddCellUnique(List<Vector2Int> list, int x, int y)
+        {
+            var v = new Vector2Int(x, y);
+            for (int i = 0; i < list.Count; i++) if (list[i] == v) return;
+            list.Add(v);
+        }
+
+        /// <summary>候选 footprint 是否与任一保留区（地表带 / Ruin bounds 外扩）相交。</summary>
         bool OverlapsAny(int x0, int y0, int w, int h, List<RectInt> protect)
         {
             var r = new RectInt(x0, y0, w, h);
@@ -207,167 +275,199 @@ namespace Ashfall
             return null;
         }
 
-        /// <summary>按类型把节点布局「规划并一次性提交」到 grid。</summary>
-        bool TryCommit(DiscoveryNodeSpec spec, DiscoveryNodeInstance inst, int x0, int y0, HashSet<Vector2Int> placedCells)
+        /// <summary>按类型把节点「结构 + 奖励矿」规划并原子提交到 grid。</summary>
+        bool TryCommit(DiscoveryNodeSpec spec, DiscoveryNodeInstance inst, int x0, int y0, System.Random rng, HashSet<Vector2Int> placedCells)
         {
-            var plan = new List<(int x, int y, TileDefinition def)>();
             int w = spec.footprintWidth, h = spec.footprintHeight;
 
-            switch (spec.type)
+            // 1. 计算结构格与奖励区（先于写）
+            var structCells = CollectStructureCells(spec, x0, y0, w, h);
+            RectInt rewardRect = RewardRect(spec, x0, y0, w, h);
+
+            // 2. 预校验结构格（纯地层、未被占用）
+            for (int i = 0; i < structCells.Count; i++)
             {
-                case DiscoveryNodeType.AbandonedMiningPocket:
-                    PlanAbandonedPocket(inst, plan, x0, y0, w, h);
-                    break;
-                case DiscoveryNodeType.ThermalVentChamber:
-                    PlanThermalVent(inst, plan, x0, y0, w, h);
-                    break;
-                case DiscoveryNodeType.AncientSignalCache:
-                    PlanAncientCache(inst, plan, x0, y0, w, h);
-                    break;
-                case DiscoveryNodeType.CollapsedResourcePocket:
-                    PlanCollapsedPocket(inst, plan, x0, y0, w, h);
-                    break;
-                default:
-                    return false;
+                var c = structCells[i];
+                if (!grid.InBounds(c.x, c.y)) return false;
+                if (placedCells.Contains(c)) return false;
+                var t = grid.GetTile(c.x, c.y);
+                if (t == null || !t.isSolid || t.blockType != BlockType.Normal || t.value > 0) return false;
             }
 
-            // 全格校验：都在界内、非保留区、未占用
-            if (plan.Count == 0) return false;
-            var local = new HashSet<Vector2Int>();
-            for (int i = 0; i < plan.Count; i++)
+            // 3. 记录结构格原 tile（回滚用）
+            var originals = new Dictionary<Vector2Int, TileDefinition>();
+            for (int i = 0; i < structCells.Count; i++)
             {
-                int x = plan[i].x, y = plan[i].y;
-                if (!grid.InBounds(x, y)) return false;
-                if (placedCells.Contains(new Vector2Int(x, y))) return false;
-                if (!local.Add(new Vector2Int(x, y))) return false;   // 同一节点内重复 → 非法
+                var c = structCells[i];
+                if (!originals.ContainsKey(c)) originals[c] = grid.GetTile(c.x, c.y);
             }
 
-            // 全过 → 一次性提交
-            for (int i = 0; i < plan.Count; i++)
+            // 4. 落结构（SetTile）+ 按 def 归类 seal/risk/reward（C 的文明奖励格直接分类）
+            for (int i = 0; i < structCells.Count; i++)
             {
-                var c = plan[i];
-                grid.SetTile(c.x, c.y, c.def);
-                inst.cells.Add(new Vector2Int(c.x, c.y));
+                var c = structCells[i];
+                TileDefinition def = StructDefFor(spec, c, x0, y0, w, h);
+                if (def == null) { RollbackStructures(originals); return false; }
+                grid.SetTile(c.x, c.y, def);
+                inst.cells.Add(c);
+                if (spec.type == DiscoveryNodeType.AncientSignalCache && def == sealTile)
+                {
+                    inst.sealCell = c; inst.riskCells.Add(c);
+                }
+                else if (spec.type == DiscoveryNodeType.AncientSignalCache &&
+                         (def == ancientDataTile || def == ancientAlloyTile))
+                {
+                    inst.rewardCells.Add(c);
+                }
+                else
+                {
+                    inst.riskCells.Add(c);
+                }
+            }
+
+            // 5. A/B/D：经 OreVeinGenerator 在奖励区种真实矿脉并登记。C 的文明奖励已随结构在步骤 4 归类。
+            if (spec.type == DiscoveryNodeType.AncientSignalCache)
+                return inst.sealCell != Vector2Int.zero && inst.rewardCells.Count > 0;
+
+            if (!CommitVeinReward(spec, inst, rewardRect, rng))
+            {
+                RollbackStructures(originals);
+                return false;
             }
             return true;
         }
 
-        void PlanAbandonedPocket(DiscoveryNodeInstance inst, List<(int x, int y, TileDefinition def)> plan,
-            int x0, int y0, int w, int h)
+        /// <summary>某节点类型对应的奖励区（footprint 内、结构带下方/后方的独立矩形）。A/D 取承重柱下方中央段，保证奖励可 4 邻到风险。</summary>
+        static RectInt RewardRect(DiscoveryNodeSpec spec, int x0, int y0, int w, int h)
         {
-            // A 废弃采矿点：底部铺 2 块高值矿奖励；其上放一根 SupportRock 横梁；梁上竖 LooseRock 段。
-            // 空间关系：奖励矿在承重岩正下方/前方，风险（拆梁→上方松散坍塌）与奖励共址但不随机散放。
-            var reward = RewardForRegion("Shallow");
-            // 底部奖励带（y0+h-1 行），取中心两格
-            int ry = y0 + h - 1;
             int cx = x0 + w / 2;
-            if (reward != null)
+            switch (spec.type)
             {
-                TryAdd(plan, cx - 1, ry, reward); TryAdd(inst.rewardCells, cx - 1, ry);
-                TryAdd(plan, cx, ry, reward); TryAdd(inst.rewardCells, cx, ry);
+                case DiscoveryNodeType.AbandonedMiningPocket:
+                    return new RectInt(cx - 1, y0 + h - 1, 3, 1);   // 承重梁下方中央 3 格（含支撑正下格）
+                case DiscoveryNodeType.ThermalVentChamber:
+                    return new RectInt(x0 + 1, y0 + h / 2, w - 1, 1); // 右/中行（避开左热列）
+                case DiscoveryNodeType.CollapsedResourcePocket:
+                    return new RectInt(cx - 1, y0 + h - 1, 3, 1);   // 承重柱下方中央 3 格
+                default:
+                    return new RectInt(x0, y0, 1, 1);
             }
-            // 承重横梁（在奖励带上一行，中心列；覆盖其正上方）
-            if (supportRockTile != null)
+        }
+
+        /// <summary>
+        /// A/B/D 奖励：经现有 OreVeinGenerator 生产并登记，锚定在奖励区中央（紧贴结构/风险格正下方，
+        /// 保证 A/D 奖励与风险 4 邻可决策）。锚点若是已有 vein 矿格 → 直接登记（组合现有 vein，不重写）；
+        /// 否则在该点经 PlantRewardVein 种一条真实矿脉并登记（账实/连通/统计同构）。两条路都走现有
+        /// vein 系统（无第二个手工矿源）。无法获得 ≥1 奖励格 → 返回 false（整节点回滚）。
+        /// </summary>
+        bool CommitVeinReward(DiscoveryNodeSpec spec, DiscoveryNodeInstance inst, RectInt rewardRect, System.Random rng)
+        {
+            if (oreVeinSource == null) return false;   // A/B/D 需要 vein 源产奖励；无则视为不可提交（回滚）
+            var ore = PickRewardOreForRegion(spec.allowedRegionId);
+            if (ore == null) return false;
+
+            int anchorX = rewardRect.xMin + rewardRect.width / 2;
+            int anchorY = rewardRect.yMin + rewardRect.height / 2;
+            var anchor = new Vector2Int(anchorX, anchorY);
+            if (!grid.InBounds(anchorX, anchorY)) return false;
+
+            var anchorDef = grid.GetTile(anchorX, anchorY);
+            bool existingOre = anchorDef != null && anchorDef.isSolid && anchorDef.value > 0;
+            List<Vector2Int> rewardCells = null;
+
+            if (existingOre)
             {
-                int sx = cx, sy = ry - 1;
-                TryAdd(plan, sx, sy, supportRockTile); TryAdd(inst.riskCells, sx, sy);
-                // 梁上 LooseRock 段（若 h 够高）
-                if (looseRockTile != null && ry - 2 >= y0)
+                // 锚点已有 vein 矿 → 组合现有 vein：登记 rewardRect 内所有现成 ore 格（不重写、不重复登记）
+                rewardCells = new List<Vector2Int>();
+                for (int y = rewardRect.yMin; y < rewardRect.yMax; y++)
+                    for (int x = rewardRect.xMin; x < rewardRect.xMax; x++)
+                    {
+                        if (!grid.InBounds(x, y)) continue;
+                        var def = grid.GetTile(x, y);
+                        if (def != null && def.isSolid && def.value > 0) rewardCells.Add(new Vector2Int(x, y));
+                    }
+                if (rewardCells.Count == 0) return false;
+            }
+            else
+            {
+                // 锚点空 → 经 OreVeinGenerator 种真实矿脉（含锚点）并登记
+                var vein = oreVeinSource.PlantRewardVein(spec.allowedRegionId, ore, anchor, 2, 3, rng, rewardRect);
+                if (vein == null) return false;
+                rewardCells = vein.cells;
+            }
+
+            for (int i = 0; i < rewardCells.Count; i++)
+            {
+                var c = rewardCells[i];
+                inst.rewardCells.Add(c);
+                if (!inst.cells.Contains(c)) inst.cells.Add(c);
+            }
+            return true;
+        }
+
+        /// <summary>按 region 从 vein 源选价值最高的矿种（复用 band 真实矿池，非新 tile）。</summary>
+        TileDefinition PickRewardOreForRegion(string regionId)
+        {
+            if (oreVeinSource == null || oreVeinSource.bands == null) return null;
+            TileDefinition best = null; int bestVal = -1;
+            for (int b = 0; b < oreVeinSource.bands.Length; b++)
+            {
+                var band = oreVeinSource.bands[b];
+                if (band == null || band.ores == null) continue;
+                if (!BandNameMatchesRegion(band.bandName, regionId)) continue;
+                for (int o = 0; o < band.ores.Length; o++)
                 {
-                    TryAdd(plan, sx, ry - 2, looseRockTile); TryAdd(inst.riskCells, sx, ry - 2);
+                    var t = band.ores[o];
+                    if (t == null) continue;
+                    if (t.value > bestVal) { bestVal = t.value; best = t; }
                 }
             }
-            // seal 占位（无）
-            inst.sealCell = new Vector2Int(-1, -1);
+            return best;
         }
 
-        void PlanThermalVent(DiscoveryNodeInstance inst, List<(int x, int y, TileDefinition def)> plan,
-            int x0, int y0, int w, int h)
+        static bool BandNameMatchesRegion(string bandName, string regionId)
         {
-            // B 热裂隙室：左侧竖一列 HotRock「热走廊」，右侧放高值矿（危险之后才到）。Cooling 使同路径可处理。
-            var reward = RewardForRegion("Mid");
-            if (hotRockTile != null)
-            {
-                int hx = x0, hyMid = y0 + h / 2;
-                TryAdd(plan, hx, hyMid, hotRockTile); TryAdd(inst.riskCells, hx, hyMid);
-                // 热岩#2：取腔室底部行 y0+h-1；当 h/2 == h-1（即 h==2）时与 hyMid 重合，
-                // 跳过以免写入重复格 —— TryCommit 会把「节点内重复格」判非法而整节点拒绝。
-                int hyBot = y0 + h - 1;
-                if (hyBot != hyMid) { TryAdd(plan, hx, hyBot, hotRockTile); TryAdd(inst.riskCells, hx, hyBot); }
-            }
-            if (reward != null)
-            {
-                int rx = x0 + w - 2, ry = y0 + h / 2;
-                TryAdd(plan, rx, ry, reward); TryAdd(inst.rewardCells, rx, ry);
-            }
-            inst.sealCell = new Vector2Int(-1, -1);
+            if (string.IsNullOrEmpty(bandName)) return true;
+            return bandName == regionId;
         }
 
-        void PlanAncientCache(DiscoveryNodeInstance inst, List<(int x, int y, TileDefinition def)> plan,
-            int x0, int y0, int w, int h)
+        TileDefinition StructDefFor(DiscoveryNodeSpec spec, Vector2Int c, int x0, int y0, int w, int h)
         {
-            // C 文明信号缓存点：极小 = 1 RuinSeal 门 + 其后 1~2 文明奖励格。不复用 AncientRelayCoreSystem/完整房间。
-            int cx = x0 + w / 2, midY = y0 + h / 2;
-            if (sealTile != null)
+            switch (spec.type)
             {
-                TryAdd(plan, cx, midY, sealTile);
-                inst.sealCell = new Vector2Int(cx, midY);
-                inst.riskCells.Add(new Vector2Int(cx, midY));
-            }
-            if (ancientDataTile != null)
-            {
-                TryAdd(plan, cx, midY - 1, ancientDataTile); TryAdd(inst.rewardCells, cx, midY - 1);
-            }
-            if (ancientAlloyTile != null && h >= 3)
-            {
-                TryAdd(plan, cx, midY + 1, ancientAlloyTile); TryAdd(inst.rewardCells, cx, midY + 1);
-            }
-        }
-
-        void PlanCollapsedPocket(DiscoveryNodeInstance inst, List<(int x, int y, TileDefinition def)> plan,
-            int x0, int y0, int w, int h)
-        {
-            // D 坍塌资源囊：中央一列 —— 最深=奖励矿，其上=SupportRock 承重，承重再上=连续 LooseRock。
-            // 玩家先挖奖励矿（深、安全）→ 到手；若先挖承重 SupportRock → BlockCollapseSystem 检测其
-            // 【上方】同列 LooseRock 段并 Unstable→落格（可能砸到奖励带/玩家）。挖掘顺序 → 不同局部后果。
-            int cx = x0 + w / 2;
-            int ry = y0 + h - 1;            // 最深一行 = 奖励带
-            int supY = ry - 1;              // 承重岩在奖励带之上
-            var reward = RewardForRegion("Mid");
-            if (reward != null)
-            {
-                TryAdd(plan, cx, ry, reward); TryAdd(inst.rewardCells, cx, ry);
-                if (cx - 1 >= x0) { TryAdd(plan, cx - 1, ry, reward); TryAdd(inst.rewardCells, cx - 1, ry); }
-            }
-            if (supportRockTile != null && supY >= y0)
-            {
-                TryAdd(plan, cx, supY, supportRockTile); TryAdd(inst.riskCells, cx, supY);
-                // 承重岩【上方】连续 LooseRock（向上扫描触发落格链）：y0 .. supY-1
-                if (looseRockTile != null)
-                    for (int yy = supY - 1; yy >= y0; yy--)
+                case DiscoveryNodeType.AbandonedMiningPocket:
                     {
-                        TryAdd(plan, cx, yy, looseRockTile); TryAdd(inst.riskCells, cx, yy);
+                        int ry = y0 + h - 1;
+                        if (c.y == ry - 1) return supportRockTile;      // 承重梁
+                        if (c.y == ry - 2) return looseRockTile;        // 梁上松散
+                        return null;
                     }
+                case DiscoveryNodeType.ThermalVentChamber:
+                    return hotRockTile;                                  // 左热列
+                case DiscoveryNodeType.AncientSignalCache:
+                    {
+                        int cx = x0 + w / 2, midY = y0 + h / 2;
+                        if (c.y == midY) return sealTile;                // 门
+                        if (c.y == midY - 1) return ancientDataTile;     // 门后文明数据
+                        if (c.y == midY + 1) return ancientAlloyTile;    // 门后文明合金
+                        return null;
+                    }
+                case DiscoveryNodeType.CollapsedResourcePocket:
+                    {
+                        int supY = y0 + h - 2;
+                        if (c.y == supY) return supportRockTile;         // 承重柱
+                        return looseRockTile;                            // 柱上松散（可坍塌）
+                    }
+                default:
+                    return null;
             }
-            inst.sealCell = new Vector2Int(-1, -1);
         }
 
-        TileDefinition RewardForRegion(string regionId)
+        void RollbackStructures(Dictionary<Vector2Int, TileDefinition> originals)
         {
-            switch (regionId)
-            {
-                case "Shallow": return rewardShallow;
-                case "Mid": return rewardMid;
-                case "Deep": return rewardDeep;
-                default: return null;
-            }
+            foreach (var kv in originals)
+                if (grid != null && grid.InBounds(kv.Key.x, kv.Key.y))
+                    grid.SetTile(kv.Key.x, kv.Key.y, kv.Value);
         }
-
-        static void TryAdd(List<(int x, int y, TileDefinition def)> list, int x, int y, TileDefinition def)
-        {
-            if (def != null) list.Add((x, y, def));
-        }
-
-        static void TryAdd(List<Vector2Int> list, int x, int y) => list.Add(new Vector2Int(x, y));
     }
 }

@@ -122,7 +122,7 @@ namespace Ashfall
             Assert(nearOut.ruin != null && nearOut.ruin.firstDiscovery, "D_Near_FirstDiscover", $"接近{boundsStr(ruin)}触发首发现");
             Assert(discovery.IsDiscovered(ruin.instanceId), "D_Near_StateSet", "近距离置 discovered=true");
             Assert(nearOut.ruin != null && nearOut.ruin.isDiscovered, "D_Res_IsDiscovered", "返回结果 isDiscovered=true");
-            string combinedMsg = oreScanner.ComposeCombinedMessage(nearOut.ore, nearOut.ruin);
+            string combinedMsg = oreScanner.ComposeCombinedMessage(nearOut.ore, nearOut.ruin, nearOut.discovery);
             Assert(combinedMsg.Length > 0 && combinedMsg.Contains("古代"), "D_CombinedFeedback",
                 $"玩家扫描反馈合入文明异常（含「{ruin.definition.displayName}」等字样）");
 

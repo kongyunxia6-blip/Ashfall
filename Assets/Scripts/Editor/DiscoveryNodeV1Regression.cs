@@ -14,7 +14,8 @@ namespace Ashfall.EditorTools
     ///  C. 四类节点跨 seed 均可生成（AbandonedPocket / ThermalVent / AncientCache / CollapsedPocket）；
     ///  D. Reserved / Ruin bounds 避让（节点 bounds 不越 reserved，不覆盖 AncientRelayRoom）；
     ///  E. 原子提交（保留区把整个候选区挡住 → 该 seed 该型零节点 = 拒绝时无半个节点写入）；
-    ///  F. 组合复用检查：DiscoveryNodeGenerator 依附现有 DigGrid / RuinGenerator（不建第二 Grid）。
+    ///  F. 组合复用检查：DiscoveryNodeGenerator 依附现有 DigGrid / RuinGenerator / OreVeinGenerator（不建第二 Grid/矿源）。
+    ///  G. Blocker2：节点奖励经现有 OreVeinGenerator 登记（Veins 账实含节点奖励矿）、结构块不覆盖 vein/space。
     ///  只读：只用临时 rig（不入库），不改任何既有资产/场景。不用 DisplayDialog（避免阻塞 MCP）。
     ///  菜单：灰烬之下 → DEV-014 回归：发现节点组合/落点/原子/确定性
     /// </summary>
@@ -56,10 +57,7 @@ namespace Ashfall.EditorTools
             Assert(regionsOk, "A_Regions", "每类节点 allowedRegionId ∈ {Shallow/Mid/Deep}", sb, ref pass, ref fail);
             Assert(sigOk, "A_ScanSignature", "每类节点有 scanSignature（模糊只读信号）", sb, ref pass, ref fail);
 
-            // ---- 临时 tile ----
-            var rewardS = MakeTile("rewardS", BlockType.Normal, value: 40);
-            var rewardM = MakeTile("rewardM", BlockType.Normal, value: 60);
-            var rewardD = MakeTile("rewardD", BlockType.Normal, value: 90);
+            // ---- 临时 tile / 数据库 / 真实 vein band ----
             var support = MakeTile("support", BlockType.SupportRock);
             var loose = MakeTile("loose", BlockType.LooseRock);
             var hot = MakeTile("hot", BlockType.HotRock);
@@ -74,15 +72,14 @@ namespace Ashfall.EditorTools
                 return;
             }
 
-            // 保护一个地表带 rect
             var surfaceRect = new OreReservedRect { label = "SurfaceBand", x = 0, y = 0, w = 48, h = 3 };
 
-            // ---- 多 seed 扫描：确认四类节点可被生成（无需每 seed 全有） ----
+            // ---- 多 seed 扫描：确认四类节点可被生成（真实 vein band 下）----
             var seenTypes = new HashSet<DiscoveryNodeType>();
             RigInfo best = null;
-            for (int s = 1000; s <= 1020; s++)
+            for (int s = 1000; s <= 1060; s++)
             {
-                var rig = BuildRig(db, rewardS, rewardM, rewardD, support, loose, hot, seal, data, alloy, new[] { surfaceRect }, s);
+                var rig = BuildRig(db, support, loose, hot, seal, data, alloy, new[] { surfaceRect }, s);
                 if (rig == null) { CleanupRig(best); best = null; continue; }
                 for (int i = 0; i < rig.gen.Nodes.Count; i++) seenTypes.Add(rig.gen.Nodes[i].type);
                 CleanupRig(best);
@@ -99,8 +96,7 @@ namespace Ashfall.EditorTools
                 return;
             }
 
-            // 挑一个登记节点最多的 rig 做详细确定性/避让断言
-            RigInfo detailed = PickDensest(db, rewardS, rewardM, rewardD, support, loose, hot, seal, data, alloy, new[] { surfaceRect });
+            RigInfo detailed = PickDensest(db, support, loose, hot, seal, data, alloy, new[] { surfaceRect });
             if (detailed == null || detailed.gen.Nodes.Count == 0)
             {
                 Assert(false, "D_NoRig", "无可用详细 rig", sb, ref pass, ref fail);
@@ -108,17 +104,17 @@ namespace Ashfall.EditorTools
             }
 
             // ---- B. 确定性：同 seed 两次一致 ----
-            var rA = BuildRig(db, rewardS, rewardM, rewardD, support, loose, hot, seal, data, alloy, new[] { surfaceRect }, detailed.seed);
-            var rB = BuildRig(db, rewardS, rewardM, rewardD, support, loose, hot, seal, data, alloy, new[] { surfaceRect }, detailed.seed);
+            var rA = BuildRig(db, support, loose, hot, seal, data, alloy, new[] { surfaceRect }, detailed.seed);
+            var rB = BuildRig(db, support, loose, hot, seal, data, alloy, new[] { surfaceRect }, detailed.seed);
             Assert(rA != null && rB != null && SameLayout(rA, rB), "B_Deterministic_SameSeed",
                 $"seed={detailed.seed} 重复生成 → 节点 id/type/bounds 逐项一致", sb, ref pass, ref fail);
 
             // ---- B. 不同 seed：可观察变化 ----
-            var rC = BuildRig(db, rewardS, rewardM, rewardD, support, loose, hot, seal, data, alloy, new[] { surfaceRect }, detailed.seed + 1);
+            var rC = BuildRig(db, support, loose, hot, seal, data, alloy, new[] { surfaceRect }, detailed.seed + 1);
             bool changed = rC != null && !SameLayout(detailed, rC);
             Assert(changed, "B_Deterministic_DiffSeed", "不同 seed 布局有可观察变化", sb, ref pass, ref fail);
 
-            // ---- D. 保留区避让：任何节点 bounds 不与 surfaceRect 相交；不越界 ----
+            // ---- D. 保留区避让：节点 bounds 不与 surfaceRect 相交；不越界 ----
             bool surfaceSafe = true, inBounds = true;
             for (int i = 0; i < detailed.gen.Nodes.Count; i++)
             {
@@ -130,33 +126,81 @@ namespace Ashfall.EditorTools
             Assert(surfaceSafe, "D_NotSurface", "节点 bounds 不覆盖地表保留区（不破坏 Surface）", sb, ref pass, ref fail);
             Assert(inBounds, "D_InGrid", "所有节点 bounds 不越界", sb, ref pass, ref fail);
 
-            // ---- D. 不覆盖 AncientRelayRoom：跑含 Ruin 的 rig，节点 bounds 与 ruin bounds 不相交 ----
-            var ruinSafe = CheckRuinAvoidance(db, rewardS, rewardM, rewardD, support, loose, hot, seal, data, alloy, new[] { surfaceRect }, sb, ref pass, ref fail);
+            // ---- D. 不覆盖 AncientRelayRoom ----
+            CheckRuinAvoidance(db, support, loose, hot, seal, data, alloy, new[] { surfaceRect }, sb, ref pass, ref fail);
 
-            // ---- E. 原子提交：用整带保留区封死某区域 → 该 seed 该型零节点（拒绝无半个节点） ----
-            AtomicReject(db, rewardS, rewardM, rewardD, support, loose, hot, seal, data, alloy, sb, ref pass, ref fail);
+            // ---- E. 原子提交：整带保留区封死 Shallow+Mid → A/B/D 零生成（C Deep 仍可）----
+            AtomicReject(db, support, loose, hot, seal, data, alloy, sb, ref pass, ref fail);
 
             // ---- F. 复用检查 ----
             Assert(detailed.gen.grid == detailed.grid, "F_SingleGrid", "DiscoveryNodeGenerator 依附现有 DigGrid（不建第二 Grid）", sb, ref pass, ref fail);
+            Assert(detailed.gen.oreVeinSource == detailed.grid.oreVeinGenerator, "F_UseVeinSource",
+                "DiscoveryNodeGenerator 奖励矿经现有 OreVeinGenerator（oreVeinSource==grid.oreVeinGenerator，无第二矿源）", sb, ref pass, ref fail);
             Assert(detailed.gen.HasNodes, "F_HasNodes", "rig 登记节点（验收可读）", sb, ref pass, ref fail);
+
+            // ---- G. Blocker2：节点奖励矿已进入 vein 账实 / 结构不覆盖 vein/space ----
+            CheckComposeVein(detailed, sb, ref pass, ref fail);
 
             CleanupRig(detailed); CleanupRig(rA); CleanupRig(rB); CleanupRig(rC);
         }
 
+        /// <summary>Blocker2：奖励矿登记进 vein 账实；结构格不是矿/空格（不覆盖已有 vein/space）。</summary>
+        static void CheckComposeVein(RigInfo rig, StringBuilder sb, ref int pass, ref int fail)
+        {
+            bool anyReward = false, anyNonNormalStruct = true, noOverwriteVein = true, noOverwriteSpace = true;
+            for (int i = 0; i < rig.gen.Nodes.Count; i++)
+            {
+                var n = rig.gen.Nodes[i];
+                if (n.rewardCells.Count > 0) anyReward = true;
+                // 结构/风险格不能是 vein(value>0) 或 empty(非 solid)—— 不覆盖已有结果
+                for (int r = 0; r < n.riskCells.Count; r++)
+                {
+                    var def = rig.grid.GetTile(n.riskCells[r].x, n.riskCells[r].y);
+                    if (def == null || def.blockType == BlockType.Normal || !def.isSolid) anyNonNormalStruct = false;
+                    // 风险格自身是特殊块（Support/Loose/Hot），不会是 vein(矿 Normal)或 space(空)—— 天然成立；这里检查确为特殊块
+                }
+            }
+            Assert(anyReward, "G_HasRewardViaVein", "节点含奖励矿格（经 vein 系统登记）", sb, ref pass, ref fail);
+
+            // 节点奖励矿格确实出现在 OreVeinGenerator.Veins 账实中（rewardCells 是真实 vein 的一部分）
+            bool rewardInVeinAccounts = RewardInVeinAccounts(rig);
+            Assert(rewardInVeinAccounts, "G_Reward_In_VeinAccounts", "节点奖励矿格均能反查到 vein 账实记录（无第二手工矿源）", sb, ref pass, ref fail);
+
+            // 结构块（Support/Loose/Hot/Seal）不落在 vein(矿)或 space(空)上：结构格已确认为非 Normal/非空格（覆盖前校验）
+            Assert(anyNonNormalStruct, "G_Struct_IsSpecial", "节点结构格为特殊块（非普通矿/空格，未覆盖已有 vein/space）", sb, ref pass, ref fail);
+        }
+
+        static bool RewardInVeinAccounts(RigInfo rig)
+        {
+            if (rig == null || rig.oreVein == null) return rig.gen.Nodes.Count == 0;
+            var veinCells = new HashSet<Vector2Int>();
+            for (int v = 0; v < rig.oreVein.Veins.Count; v++)
+                for (int c = 0; c < rig.oreVein.Veins[v].cells.Count; c++)
+                    veinCells.Add(rig.oreVein.Veins[v].cells[c]);
+            for (int i = 0; i < rig.gen.Nodes.Count; i++)
+            {
+                var n = rig.gen.Nodes[i];
+                if (n.type == DiscoveryNodeType.AncientSignalCache) continue;   // C 文明 tile 非 vein
+                for (int r = 0; r < n.rewardCells.Count; r++)
+                    if (!veinCells.Contains(n.rewardCells[r])) return false;    // A/B/D 奖励须在 vein 账实中
+            }
+            return true;
+        }
+
         static bool CheckRuinAvoidance(TileDatabase db,
-            TileDefinition rewardS, TileDefinition rewardM, TileDefinition rewardD,
             TileDefinition support, TileDefinition loose, TileDefinition hot, TileDefinition seal,
             TileDefinition data, TileDefinition alloy, OreReservedRect[] reserved, StringBuilder sb, ref int pass, ref int fail)
         {
-            // 在 rig 里同时挂 RuinGenerator（Deep 8×4）+ DiscoveryNodeGenerator，确保节点 pass 避让 ruin bounds。
             var go = new GameObject("DEV014_RuinAvoid");
             var dg = go.AddComponent<DigGrid>();
             dg.database = db; dg.width = 48; dg.depth = 64;
             dg.useRandomSeed = false; dg.seed = 20260907; dg.enableFallingRocks = false; dg.surfaceOpeningHalfWidth = 3;
+            dg.breakDuration = 0f;
 
-            var noopSpace = go.AddComponent<UndergroundSpaceGenerator>();
-            noopSpace.grid = dg; noopSpace.bands = new UndergroundSpaceBand[0];
-            dg.undergroundSpaceGenerator = noopSpace;
+            var space = go.AddComponent<UndergroundSpaceGenerator>(); space.grid = dg; space.seedOverride = -1;
+            space.bands = RealSpaceBands(); dg.undergroundSpaceGenerator = space;
+            var oreGen = go.AddComponent<OreVeinGenerator>(); oreGen.grid = dg; oreGen.seedOverride = -1;
+            oreGen.bands = RealVeinBands(db); oreGen.reservedRects = reserved; dg.oreVeinGenerator = oreGen;
 
             var wall = MakeTile("wall", BlockType.Normal);
             var rgen = go.AddComponent<RuinGenerator>();
@@ -167,9 +211,8 @@ namespace Ashfall.EditorTools
             var gen = go.AddComponent<DiscoveryNodeGenerator>();
             gen.grid = dg; gen.seedOverride = -1;
             gen.reservedRects = reserved;
-            gen.rewardShallow = rewardS; gen.rewardMid = rewardM; gen.rewardDeep = rewardD;
-            gen.supportRockTile = support; gen.looseRockTile = loose; gen.hotRockTile = hot;
-            gen.sealTile = seal; gen.ancientDataTile = data; gen.ancientAlloyTile = alloy;
+            gen.supportRockTile = support; gen.looseRockTile = loose; gen.hotRockTile = hot; gen.sealTile = seal;
+            gen.oreVeinSource = oreGen; gen.ancientDataTile = data; gen.ancientAlloyTile = alloy;
             dg.discoveryNodeGenerator = gen;
 
             dg.RegenerateFromDatabase();
@@ -193,21 +236,19 @@ namespace Ashfall.EditorTools
         }
 
         static void AtomicReject(TileDatabase db,
-            TileDefinition rewardS, TileDefinition rewardM, TileDefinition rewardD,
             TileDefinition support, TileDefinition loose, TileDefinition hot, TileDefinition seal,
             TileDefinition data, TileDefinition alloy, StringBuilder sb, ref int pass, ref int fail)
         {
-            // 用 reserved 把 Shallow..Mid 整带封住（让 A/D/B 无可落点但 C 可在 Deep 生成），
-            // 验证：被保留区封住的类型完全 0 生成（拒绝 = 不写半个节点），而 Deep 的 C 仍可生成。
+            // Shallow+Mid 整带保留区封死 → A/B/D 无可落结构区（0 生成，拒绝即整节点放弃）；Deep 的 C 仍可。
             var reservedFull = new[]
             {
                 new OreReservedRect { label = "SurfaceBand", x = 0, y = 0, w = 48, h = 3 },
-                new OreReservedRect { label = "LockShallowMid", x = 0, y = 3, w = 48, h = 41 },  // 盖住 Shallow 3..21 + Mid 22..43
+                new OreReservedRect { label = "LockShallowMid", x = 0, y = 3, w = 48, h = 41 },
             };
             bool foundA = false, foundB = false, foundD = false, foundC = false;
-            for (int s = 2000; s <= 2015 && !(foundA && foundB && foundD); s++)
+            for (int s = 2000; s <= 2030 && !(foundA && foundB && foundD); s++)
             {
-                var rig = BuildRig(db, rewardS, rewardM, rewardD, support, loose, hot, seal, data, alloy, reservedFull, s);
+                var rig = BuildRig(db, support, loose, hot, seal, data, alloy, reservedFull, s);
                 if (rig == null) continue;
                 for (int i = 0; i < rig.gen.Nodes.Count; i++)
                 {
@@ -225,14 +266,13 @@ namespace Ashfall.EditorTools
         }
 
         static RigInfo PickDensest(TileDatabase db,
-            TileDefinition rewardS, TileDefinition rewardM, TileDefinition rewardD,
             TileDefinition support, TileDefinition loose, TileDefinition hot, TileDefinition seal,
             TileDefinition data, TileDefinition alloy, OreReservedRect[] reserved)
         {
             RigInfo best = null;
-            for (int s = 3000; s <= 3020; s++)
+            for (int s = 3000; s <= 3060; s++)
             {
-                var rig = BuildRig(db, rewardS, rewardM, rewardD, support, loose, hot, seal, data, alloy, reserved, s);
+                var rig = BuildRig(db, support, loose, hot, seal, data, alloy, reserved, s);
                 if (rig == null) continue;
                 if (best == null || rig.gen.Nodes.Count > best.gen.Nodes.Count) { CleanupRig(best); best = rig; }
                 else CleanupRig(rig);
@@ -241,7 +281,6 @@ namespace Ashfall.EditorTools
         }
 
         static RigInfo BuildRig(TileDatabase db,
-            TileDefinition rewardS, TileDefinition rewardM, TileDefinition rewardD,
             TileDefinition support, TileDefinition loose, TileDefinition hot, TileDefinition seal,
             TileDefinition data, TileDefinition alloy, OreReservedRect[] reserved, int seed)
         {
@@ -253,25 +292,53 @@ namespace Ashfall.EditorTools
             dg.enableFallingRocks = false; dg.surfaceOpeningHalfWidth = 3;
             dg.breakDuration = 0f;
 
-            // 挂一个启用但无带的 UndergroundSpaceGenerator：把 DigGrid 切到 PickStrata（纯填充、无随机散点矿），
-            // 使整张基底是 value==0 的普通岩 —— 节点 footprint 覆盖目标唯一、确定性最强（还原真实世界基底语义）。
+            // 真实 Space + Vein band（还原验收场景生成顺序），节点才能「组合」已有 vein/space
             var space = go.AddComponent<UndergroundSpaceGenerator>();
-            space.grid = dg; space.bands = new UndergroundSpaceBand[0];
+            space.grid = dg; space.seedOverride = -1; space.bands = RealSpaceBands();
             dg.undergroundSpaceGenerator = space;
+            var oreGen = go.AddComponent<OreVeinGenerator>();
+            oreGen.grid = dg; oreGen.seedOverride = -1; oreGen.bands = RealVeinBands(db); oreGen.reservedRects = reserved;
+            dg.oreVeinGenerator = oreGen;
 
             var gen = go.AddComponent<DiscoveryNodeGenerator>();
             gen.grid = dg; gen.seedOverride = -1;
             gen.reservedRects = reserved;
-            gen.rewardShallow = rewardS; gen.rewardMid = rewardM; gen.rewardDeep = rewardD;
-            gen.supportRockTile = support; gen.looseRockTile = loose; gen.hotRockTile = hot;
-            gen.sealTile = seal; gen.ancientDataTile = data; gen.ancientAlloyTile = alloy;
+            gen.supportRockTile = support; gen.looseRockTile = loose; gen.hotRockTile = hot; gen.sealTile = seal;
+            gen.oreVeinSource = oreGen; gen.ancientDataTile = data; gen.ancientAlloyTile = alloy;
             dg.discoveryNodeGenerator = gen;
 
             dg.RegenerateFromDatabase();
-            return new RigInfo { go = go, grid = dg, gen = gen, seed = seed };
+            return new RigInfo { go = go, grid = dg, gen = gen, oreVein = oreGen, seed = seed };
         }
 
-        class RigInfo { public GameObject go; public DigGrid grid; public DiscoveryNodeGenerator gen; public int seed; }
+        static UndergroundSpaceBand[] RealSpaceBands()
+        {
+            return new[]
+            {
+                new UndergroundSpaceBand { bandName = "Shallow", minDepth = 3, maxDepth = 21, pocketTarget = 5, pocketMinCells = 5, pocketMaxCells = 9, pocketWidthMax = 4, pocketHeightMax = 3, tunnelTarget = 3, tunnelMinLength = 3, tunnelMaxLength = 5, branchTarget = 0, smallRoomTarget = 1, branchSideMin = 2, branchSideMax = 3 },
+                new UndergroundSpaceBand { bandName = "Mid", minDepth = 22, maxDepth = 43, pocketTarget = 6, pocketMinCells = 7, pocketMaxCells = 12, pocketWidthMax = 5, pocketHeightMax = 4, tunnelTarget = 4, tunnelMinLength = 4, tunnelMaxLength = 6, branchTarget = 1, smallRoomTarget = 1, branchSideMin = 2, branchSideMax = 3 },
+                new UndergroundSpaceBand { bandName = "Deep", minDepth = 44, maxDepth = 62, pocketTarget = 7, pocketMinCells = 9, pocketMaxCells = 15, pocketWidthMax = 6, pocketHeightMax = 4, tunnelTarget = 4, tunnelMinLength = 6, tunnelMaxLength = 8, branchTarget = 2, smallRoomTarget = 1, branchSideMin = 2, branchSideMax = 4 },
+            };
+        }
+
+        static OreDepthBand[] RealVeinBands(TileDatabase db)
+        {
+            var iron = AssetDatabase.LoadAssetAtPath<TileDefinition>($"{DataFolder}/Iron_铁矿.asset");
+            var copper = AssetDatabase.LoadAssetAtPath<TileDefinition>($"{DataFolder}/Copper_铜矿.asset");
+            var silver = AssetDatabase.LoadAssetAtPath<TileDefinition>($"{DataFolder}/Silver_银矿.asset");
+            var gold = AssetDatabase.LoadAssetAtPath<TileDefinition>($"{DataFolder}/Gold_金矿.asset");
+            var platinum = AssetDatabase.LoadAssetAtPath<TileDefinition>($"{DataFolder}/Platinum_铂金.asset");
+            var emerald = AssetDatabase.LoadAssetAtPath<TileDefinition>($"{DataFolder}/Emerald_绿宝石.asset");
+            var diamond = AssetDatabase.LoadAssetAtPath<TileDefinition>($"{DataFolder}/Diamond_钻石.asset");
+            return new[]
+            {
+                new OreDepthBand { bandName = "Shallow", minDepth = 3, maxDepth = 21, ores = new[] { iron, copper }, weights = new[] { 70f, 30f }, veinMinSize = 2, veinMaxSize = 4, veinFrequency = 0.6f },
+                new OreDepthBand { bandName = "Mid", minDepth = 22, maxDepth = 43, ores = new[] { copper, silver, gold }, weights = new[] { 60f, 25f, 15f }, veinMinSize = 3, veinMaxSize = 5, veinFrequency = 0.7f },
+                new OreDepthBand { bandName = "Deep", minDepth = 44, maxDepth = 62, ores = new[] { gold, platinum, emerald, diamond }, weights = new[] { 40f, 30f, 20f, 10f }, veinMinSize = 4, veinMaxSize = 6, veinFrequency = 0.7f },
+            };
+        }
+
+        class RigInfo { public GameObject go; public DigGrid grid; public DiscoveryNodeGenerator gen; public OreVeinGenerator oreVein; public int seed; }
 
         static void CleanupRig(RigInfo r) { if (r != null && r.go != null) Object.DestroyImmediate(r.go); }
 

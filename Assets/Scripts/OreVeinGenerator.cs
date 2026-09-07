@@ -219,12 +219,14 @@ namespace Ashfall
             }
 
             // 6. 记录（含包围盒）
-            var rec = new OreVeinRecord
-            {
-                bandName = band.bandName ?? band.minDepth + "-" + band.maxDepth,
-                ore = ore,
-                cells = cells
-            };
+            var rec = MakeRecord(band.bandName ?? band.minDepth + "-" + band.maxDepth, ore, cells);
+            Veins.Add(rec);
+        }
+
+        /// <summary>把某条已生长/已落格的矿格列表登记成一条 OreVeinRecord（含包围盒；复用账实）。</summary>
+        static OreVeinRecord MakeRecord(string bandName, TileDefinition ore, List<Vector2Int> cells)
+        {
+            var rec = new OreVeinRecord { bandName = bandName, ore = ore, cells = cells };
             int minX = int.MaxValue, minY = int.MaxValue, maxX = int.MinValue, maxY = int.MinValue;
             foreach (var c in cells)
             {
@@ -235,7 +237,72 @@ namespace Ashfall
             }
             rec.bboxMin = new Vector2Int(minX, minY);
             rec.bboxMax = new Vector2Int(maxX, maxY);
+            return rec;
+        }
+
+        /// <summary>
+        /// DEV-014 Blocker2 复用接口：在指定锚点格种一条【真实矿脉】并登记进 Veins（供 DiscoveryNodeGenerator
+        /// 作节点奖励矿，避免第二个手工矿源）。与 TryGrowVein 共用纯填充地层落格规则、事务化、登记语义；
+        /// 区别是起点/矿种由调用方显式给定（节点已选好区域锚点），不再走带内随机起点。
+        ///
+        /// 账实一致：落格走 grid.SetTile + 计入 TotalCellsPlanted + 登记 Veins（连通/统计/回归可见），
+        /// 与普通矿脉完全同构。若锚点被已有矿/特殊块/空格占据，或长不足 minSize，则整体回滚并返回 null（零残留）。
+        /// </summary>
+        public OreVeinRecord PlantRewardVein(string bandName, TileDefinition ore, Vector2Int start,
+            int minSize, int maxSize, System.Random rng, RectInt stayInside = default)
+        {
+            if (grid == null || grid.database == null || ore == null) return null;
+            if (start.x <= 0 || start.x >= grid.Width - 1 || start.y <= 0 || start.y >= grid.Depth - 1) return null;
+            if (rng == null) rng = new System.Random(EffectiveSeed);
+            bool constrained = stayInside.width > 0 && stayInside.height > 0;
+
+            // 锚点必须落在可落矿格（宽松判定：纯填充地层格；若约束内则须在约束内）
+            if (!CanPlantOnFill(start.x, start.y)) return null;
+            if (constrained && !Inside(start.x, start.y, stayInside)) return null;
+
+            int lo = System.Math.Max(2, minSize);
+            int hi = System.Math.Max(lo, maxSize);
+            int target = lo == hi ? lo : rng.Next(lo, hi + 1);
+
+            // 临时列表从锚点 8 邻生长，只落在纯填充地层格（且可选约束框内）
+            var cells = new List<Vector2Int> { start };
+            int guard = target * 24 + 64;
+            while (cells.Count < target && guard-- > 0)
+            {
+                var anchor = cells[rng.Next(cells.Count)];
+                int nx = anchor.x + rng.Next(-1, 2);
+                int ny = anchor.y + rng.Next(-1, 2);
+                if (nx == anchor.x && ny == anchor.y) continue;
+                if (constrained && !Inside(nx, ny, stayInside)) continue;
+                if (!CanPlantOnFill(nx, ny)) continue;
+                if (cells.Contains(new Vector2Int(nx, ny))) continue;
+                cells.Add(new Vector2Int(nx, ny));
+            }
+            if (cells.Count < lo) return null;   // 长不足 → 零残留
+
+            foreach (var c in cells) grid.SetTile(c.x, c.y, ore);
+            TotalCellsPlanted += cells.Count;
+            var rec = MakeRecord(bandName, ore, cells);
             Veins.Add(rec);
+            return rec;
+        }
+
+        static bool Inside(int x, int y, RectInt r)
+            => x >= r.xMin && x < r.xMax && y >= r.yMin && y < r.yMax;
+
+        /// <summary>宽松「可落矿格」判定：界内、非左右/底部 bedrock、实心、value==0、非 hazard、blockType==Normal。</summary>
+        bool CanPlantOnFill(int x, int y)
+        {
+            if (!grid.InBounds(x, y)) return false;
+            if (x <= 0 || x >= grid.Width - 1) return false;
+            if (y >= grid.Depth - 1) return false;
+            var def = grid.GetTile(x, y);
+            if (def == null) return false;
+            if (!def.isSolid) return false;
+            if (def.value > 0) return false;         // 已有矿不覆盖
+            if (def.isHazard) return false;
+            if (def.blockType != BlockType.Normal) return false;
+            return true;
         }
 
         /// <summary>

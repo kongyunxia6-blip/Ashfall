@@ -141,9 +141,9 @@ namespace Ashfall.EditorTools
             nodeGen.looseRockTile = looseRock;
             nodeGen.hotRockTile = hotRock;
             nodeGen.sealTile = seal;
-            nodeGen.rewardShallow = gold;
-            nodeGen.rewardMid = platinum;
-            nodeGen.rewardDeep = diamond;
+            // Blocker2：A/B/D 奖励矿经现有 OreVeinGenerator 种植+登记（同一 oreGen），无第二个手工矿源。
+            nodeGen.oreVeinSource = oreGen;
+            // C 文明奖励（非 vein 语义）仍注入：
             nodeGen.ancientDataTile = dataFragment;
             nodeGen.ancientAlloyTile = ancientAlloy;
             digGrid.discoveryNodeGenerator = nodeGen;
@@ -211,6 +211,18 @@ namespace Ashfall.EditorTools
             discovery.generator = ruinGen;
             oreScanner.ruinDiscovery = discovery;
 
+            // DiscoveryNodeDiscoveryService（DEV-014 Blocker1 扫描接线；节点模糊异常信号）
+            var nodeDiscovery = gmGo.AddComponent<DiscoveryNodeDiscoveryService>();
+            nodeDiscovery.discoveryNodeGenerator = nodeGen;
+            oreScanner.discoveryNodeDiscovery = nodeDiscovery;
+
+            // ---- SellTerminal（Blocker3 Vertical Slice：返航售货 → RunRisk.NotifyCargoSecured 收官）----
+            var sellGo = new GameObject("SellTerminal");
+            var sellCircle = sellGo.AddComponent<CircleCollider2D>();
+            sellCircle.radius = 1f;
+            sellGo.transform.position = digGrid.GridToWorld(GridWidth / 2, 1) + new Vector3(3f, 0, 0); // 地表坑口旁
+            var sellTerminal = sellGo.AddComponent<SellTerminal>();
+
             // ---- 探针 ----
             var probe = gmGo.AddComponent<DiscoveryNodeV1Probe>();
             probe.grid = digGrid;
@@ -218,6 +230,7 @@ namespace Ashfall.EditorTools
             probe.vehicle = vehicle;
             probe.equipment = gm.Equipment;
             probe.oreScanner = oreScanner;
+            probe.discoveryService = nodeDiscovery;
             probe.collapse = fgGo.GetComponent<BlockCollapseSystem>();
             probe.hotRock = fgGo.GetComponent<HotRockSystem>();
             probe.seal = fgGo.GetComponent<RuinSealSystem>();
