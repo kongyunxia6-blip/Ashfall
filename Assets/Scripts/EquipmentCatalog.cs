@@ -59,15 +59,15 @@ namespace Ashfall
 
         public static int MaxLevelOf(EquipmentLine line) => MaxLevel;
 
-        /// <summary>升级到 nextLevel（1..3）的价格。</summary>
+        /// <summary>升级到 nextLevel（1..3）的价格。DEV-015：按「首升≈1 浅层 Run、中段 1~3 Run、高阶需 Mid/Deep」节奏校准。</summary>
         public static int CostOf(EquipmentLine line, int nextLevel)
         {
             switch (line)
             {
-                case EquipmentLine.Drill:      return P(nextLevel, 60, 150, 380);
-                case EquipmentLine.FuelTank:   return P(nextLevel, 70, 170, 420);
-                case EquipmentLine.CargoHold:  return P(nextLevel, 80, 200, 500);
-                case EquipmentLine.Mobility:   return P(nextLevel, 45, 110, 280);
+                case EquipmentLine.Drill:      return P(nextLevel, 150, 500, 1800);
+                case EquipmentLine.FuelTank:   return P(nextLevel, 200, 700, 2500);
+                case EquipmentLine.CargoHold:  return P(nextLevel, 220, 800, 3000);
+                case EquipmentLine.Mobility:   return P(nextLevel, 120, 400, 1500);
                 default: return 9999;
             }
         }

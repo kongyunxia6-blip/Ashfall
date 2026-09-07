@@ -17,7 +17,7 @@ MonoBehaviour:
   hardness: 4
   digHits: 1
   drillTime: 0.7
-  value: 11000
+  value: 2600
   weight: 3.5
   stackLimit: 16
   gridWidth: 1
