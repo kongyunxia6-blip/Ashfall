@@ -1,0 +1,47 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 91b146903419da343a15ffedc6e0a1f1, type: 3}
+  m_Name: TileDatabase_Strata
+  m_EditorClassIdentifier: Assembly-CSharp::Ashfall.TileDatabase
+  emptyTile: {fileID: 11400000, guid: bb9da42b81dcae84ebacdfb648092836, type: 2}
+  bedrockTile: {fileID: 11400000, guid: c26d70345b687bb45ab7b2127f283dfb, type: 2}
+  layers:
+  - startDepth: 0
+    tiles:
+    - {fileID: 11400000, guid: 6f5909748e5d74c46a3edd6f959dbbf2, type: 2}
+    weights:
+    - 1
+    caveChance: 0.02
+  - startDepth: 100
+    tiles:
+    - {fileID: 11400000, guid: 4f8cffcc30326f54996c072c616ad0fa, type: 2}
+    weights:
+    - 1
+    caveChance: 0.024999999
+  - startDepth: 250
+    tiles:
+    - {fileID: 11400000, guid: 6f59d352711cf8e46a9924b1427c23e2, type: 2}
+    weights:
+    - 1
+    caveChance: 0.03
+  - startDepth: 450
+    tiles:
+    - {fileID: 11400000, guid: cc4c586f083bff04293db31e84868627, type: 2}
+    weights:
+    - 1
+    caveChance: 0.035
+  - startDepth: 575
+    tiles:
+    - {fileID: 11400000, guid: 62a4512423e89a743a517e54d4e89e3f, type: 2}
+    weights:
+    - 1
+    caveChance: 0.04
