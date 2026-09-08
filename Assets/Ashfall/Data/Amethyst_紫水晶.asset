@@ -1,0 +1,29 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 18c8a4b065a0d4347aeb5af2bee05a73, type: 3}
+  m_Name: "Amethyst_\u7D2B\u6C34\u6676"
+  m_EditorClassIdentifier: Assembly-CSharp::Ashfall.TileDefinition
+  displayName: "Amethyst_\u7D2B\u6C34\u6676"
+  color: {r: 0.62, g: 0.35, b: 0.78, a: 1}
+  hardness: 2
+  digHits: 1
+  drillTime: 0.43
+  value: 70
+  weight: 1.4
+  stackLimit: 16
+  gridWidth: 1
+  isSolid: 1
+  isHazard: 0
+  hazardDamage: 0
+  dropId: 
+  blockType: 0
+  visualProfile: {fileID: 0}

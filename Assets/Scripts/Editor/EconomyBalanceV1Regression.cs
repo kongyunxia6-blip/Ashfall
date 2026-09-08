@@ -255,7 +255,50 @@ namespace Ashfall.EditorTools
                 "S6_DetourHasRealFuelCost", $"绕路非零成本（12 格 ≈ {detourCells * 1.1f * 2.2f * 1.35f:0} fuel）→ 不为节点免费旅行");
         }
 
-        // ---------- 主入口 ----------
+        // ---------- S7 完整矿种经济表（Blocker1 收口：覆盖全部可及 OreCatalog） ----------
+        static void S7_CompleteOreTable(StringBuilder o)
+        {
+            o.AppendLine("\n== S7 完整矿种经济表（覆盖全部 17 种可及矿，含 DEV-015 补齐的 8 新矿）==");
+            // 1~15 为普通带矿（Shallow→Deep，v/w 严格递增）；16/17 为稀有特殊（节点/彩蛋，高密度需绕路/极罕见）
+            var names = new[]{
+                "Coal_煤","Iron_铁矿","Tin_锡矿","Lead_铅矿","Copper_铜矿","Amethyst_紫水晶",
+                "Silver_银矿","Gold_金矿","Sapphire_蓝宝石","Emerald_绿宝石","Uranium_铀矿",
+                "Platinum_铂金","Ruby_红宝石","EnergyCrystal_能量水晶","Diamond_钻石",
+                "AnomalousCrystal_异常水晶","UnknownMineral_未知矿物",
+            };
+            var all = new TileDefinition[names.Length];
+            for (int i = 0; i < names.Length; i++)
+            {
+                all[i] = Load(names[i]);
+                if (all[i] == null) { Assert(false, "S7_Asset_Missing_" + names[i], $"缺少资产 {names[i]}"); return; }
+            }
+            o.AppendLine($"  {"资源",-10}{"hard",4}{"val",7}{"w",5}{"v/w",8}  归属");
+            for (int i = 0; i < 15; i++)
+                o.AppendLine($"  {all[i].name,-10}{all[i].hardness,4}{all[i].value,7}{all[i].weight,5:F1}{Density(all[i]),8:F1}  普通带");
+            o.AppendLine($"  {all[15].name,-10}{all[15].hardness,4}{all[15].value,7}{all[15].weight,5:F1}{Density(all[15]),8:F1}  节点/事件(需绕路)");
+            o.AppendLine($"  {all[16].name,-10}{all[16].hardness,4}{all[16].value,7}{all[16].weight,5:F1}{Density(all[16]),8:F1}  深稀/彩蛋");
+
+            // 断言 1：1~15 普通带矿 v/w 严格递增（与既有 9 矿链一致并补齐 Shallow/Mid/Deep 空档）
+            bool asc = true; var sb2 = new StringBuilder();
+            for (int i = 1; i < 15; i++)
+            {
+                if (Density(all[i]) <= Density(all[i - 1]) + 1e-4f) asc = false;
+                sb2.Append(Density(all[i - 1]).ToString("0.0")).Append(" < ");
+            }
+            sb2.Append(Density(all[14]).ToString("0.0"));
+            Assert(asc, "S7_FullLadderAscending", $"Coal..Diamond(15 档) v/w 严格递增: {sb2}");
+
+            // 断言 2：异常水晶/未知矿物密度显著高于普通带顶值(Diamond)，但轻/极罕见 → 需绕路/彩蛋，不破坏取舍
+            Assert(Density(all[15]) > Density(all[14]) && all[15].weight < all[14].weight,
+                "S7_Anomalous_LightPremium", $"AnomalousCrystal v/w {Density(all[15]):0.0} > Diamond {Density(all[14]):0.0} 且更轻 {all[15].weight} → 节点诱惑(绕路)成立");
+            Assert(Density(all[16]) > Density(all[15]) && all[16].hardness == 5,
+                "S7_Unknown_DeepRare", $"UnknownMineral v/w {Density(all[16]):0.0} 最高且 hardness5 → 深稀彩蛋，极高门槛");
+            // 断言 3：铀带轻微热(冒险) + 高 hardness 门槛；普通带矿 hardness 与价值正相关(越深越硬)
+            bool hardAsc = true;
+            for (int i = 1; i < 15; i++) if (all[i].hardness < all[i - 1].hardness) hardAsc = false;
+            Assert(hardAsc, "S7_HardnessMonotonic", "普通带矿 hardness 单调不减 → 深矿=更高钻头门槛，非单乘价");
+        }
+
         [MenuItem("灰烬之下/DEV-015 回归：资源/深度经济平衡 V1")]
         public static void Run()
         {
@@ -272,6 +315,7 @@ namespace Ashfall.EditorTools
                 S4_ThreeLoadoutRuns(sb);
                 S5_UpgradeCadence(sb);
                 S6_DiscoveryNodeRiskReward(sb);
+                S7_CompleteOreTable(sb);
             }
             catch (Exception e)
             {

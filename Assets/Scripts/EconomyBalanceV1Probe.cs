@@ -11,11 +11,12 @@ namespace Ashfall
     ///
     /// 覆盖 Issue #32 需真实运行/决策路径的核心：一条【真实】 Surface → 下矿 → Cargo 选择
     /// → 返航 → Sell 的完整 Run（RunRiskState 生命周期驱动，非手动 BeginRun）：
+    ///   E0 玩家在地表 Workbench 以 Cash 经 EquipmentProgression.TryUpgrade 合法准备装备；
     ///   E1 玩家处地表 Hub → 状态机不开 Run（干净基线）；
     ///   E2 真实下潜离开地表 → RunRiskState 状态机自己 BeginRun（RunActive=true、RunNumber+1）；
     ///   E3 真实挖低值 Iron 填满 Cargo（HandleTileDug 入包，载重达 MaxCarryWeight）；
-    ///   E4 挖到紧邻高值 Emerald → HandleTileDug 顶掉最低密度 Iron（丢铁矿换钻石语义）：
-    ///      CargoValue 跳升、Iron 计数下降、载重仍 ≤ 上限、Emerald 入舱；
+    ///   E4 挖到紧邻高值 Copper → HandleTileDug 顶掉最低密度 Iron：
+    ///      CargoValue 跳升、Iron 计数下降、载重仍 ≤ 上限、高值矿入舱；
     ///   E5 返航决策：真实剩油 &gt; 上行返航所需（真实 LoadRatio×fuelMove×upward）→ 见好就收、可安全回；
     ///   E6 真实返航地表（物理逐格，无瞬移）；
     ///   E7 真实驶入 SellTerminal → PlayerInRange=true → TrySell 增收 → Cargo 清空 → Run 结束。
@@ -30,7 +31,7 @@ namespace Ashfall
         public DrillVehicle vehicle;
         public EquipmentProgression equipment;
         public OreScanner oreScanner;
-        public TileDefinition iron, emerald, gold, dirt, emptyTile;
+        public TileDefinition iron, highValueOre, gold, dirt, emptyTile;
 
         const string OutPath = "C:/Users/58058/.workbuddy/tools/d15_play_result.txt";
 
@@ -43,7 +44,7 @@ namespace Ashfall
         const int OreRowY = GalleryY + 5; // 低值铁排所在行
         const int IronStartX = Center - 14;   // 铁排起点 x=18
         const int IronCount = 30;             // 铁排格数
-        const int EmeraldX = IronStartX + IronCount;  // 铁排紧邻右侧高值矿 x=48
+        const int HighValueOreX = IronStartX + IronCount;  // 铁排紧邻右侧高值矿 x=48
 
         IEnumerator Start()
         {
@@ -57,13 +58,14 @@ namespace Ashfall
             if (oreScanner == null) oreScanner = FindFirstObjectByType<OreScanner>();
             if (equipment == null) equipment = FindFirstObjectByType<EquipmentProgression>();
             gm = GameManager.Instance;
-            if (grid == null || vehicle == null || gm == null || gm.RunRisk == null)
+            if (grid == null || vehicle == null || gm == null || gm.RunRisk == null || equipment == null)
             {
                 Assert(false, "RIG", $"缺系统 grid={grid} vehicle={vehicle} gm={gm}"); yield break;
             }
 
             sb.AppendLine("==== DEV-015 真实播放：经济闭环 Vertical Slice ====");
             yield return SetupCourse();          // 载入场景后 DigGrid.Awake 会重新生成 → 在 Start 里重凿受控 course
+            yield return E0_PrepareEquipmentAtWorkbench(gm);
             yield return E1_SurfaceBaseline(gm);
             yield return E2_DescendAutoRun(gm);
             yield return E3_MineIronFill(gm);
@@ -82,9 +84,9 @@ namespace Ashfall
         IEnumerator SetupCourse()
         {
             sb.AppendLine("\n== COURSE. 运行时凿建受控 course（DigGrid.Awake 再生后重凿） ==");
-            if (emptyTile == null || iron == null || emerald == null)
+            if (emptyTile == null || iron == null || highValueOre == null)
             {
-                Assert(false, "COURSE_Assets", $"缺 tile 引用 empty={emptyTile} iron={iron} emerald={emerald}"); yield break;
+                Assert(false, "COURSE_Assets", $"缺 tile 引用 empty={emptyTile} iron={iron} highValueOre={highValueOre}"); yield break;
             }
             // 3 列宽竖井（x=Center±1, y=3..GalleryY）清空
             for (int x = Center - 1; x <= Center + 1; x++)
@@ -94,16 +96,45 @@ namespace Ashfall
             for (int x = Center - 4; x <= Center + 4; x++)
                 for (int y = GalleryY + 1; y <= GalleryY + 3; y++)
                     grid.SetTile(x, y, emptyTile);
-            // 低值 Iron 排 + 紧邻高值 Emerald
+            // 低值 Iron 排 + 紧邻高值矿（Copper：同为正式经济资源，Lv0 可挖，避免双写旧 UpgradeSystem）
             for (int i = 0; i < IronCount; i++)
                 grid.SetTile(IronStartX + i, OreRowY, iron);
-            grid.SetTile(EmeraldX, OreRowY, emerald);
+            grid.SetTile(HighValueOreX, OreRowY, highValueOre);
             // 地表通往 SellTerminal 的横向通道清空
             for (int x = Center - 3; x <= Center + 6; x++)
                 for (int y = 0; y <= 1; y++)
                     grid.SetTile(x, y, emptyTile);
-            Assert(true, "COURSE_Carved", $"凿建完成：竖井到 GalleryY={GalleryY}，Iron x={IronStartX}..{IronStartX + IronCount - 1} y={OreRowY}，Emerald x={EmeraldX} y={OreRowY}");
+            Assert(true, "COURSE_Carved", $"凿建完成：竖井到 GalleryY={GalleryY}，Iron x={IronStartX}..{IronStartX + IronCount - 1} y={OreRowY}，{highValueOre.displayName} x={HighValueOreX} y={OreRowY}");
             yield return NullFrame(0.1f);
+        }
+
+        // ---------- E0 地表 Workbench + Cash 合法准备装备 ----------
+        IEnumerator E0_PrepareEquipmentAtWorkbench(GameManager gm)
+        {
+            sb.AppendLine("\n== E0. Surface / Workbench / Cash → EquipmentProgression 合法准备 ==");
+            Assert(equipment != null, "E0_HasEquipmentAuthority", "场景存在 EquipmentProgression 权威组件");
+            Assert(gm.IsAtSurface, "E0_AtSurface", "装备准备发生在 Surface、Run 开始之前");
+            yield return new WaitForFixedUpdate();
+            yield return new WaitForEndOfFrame();
+            Assert(UpgradeWorkbench.PlayerInRange, "E0_WorkbenchInRange", "玩家真实位于 Workbench Trigger 内");
+            Assert(equipment != null && equipment.GetLevel(EquipmentLine.Drill) == 0,
+                "E0_FactoryDrill", $"准备前 Drill Lv{(equipment != null ? equipment.GetLevel(EquipmentLine.Drill) : -1)}");
+
+            int cashBefore = gm.Cash;
+            int expectedCost = EquipmentCatalog.CostOf(EquipmentLine.Drill, 1)
+                             + EquipmentCatalog.CostOf(EquipmentLine.Drill, 2);
+            var lv1 = equipment.TryUpgrade(EquipmentLine.Drill);
+            var lv2 = equipment.TryUpgrade(EquipmentLine.Drill);
+            yield return new WaitForFixedUpdate();
+
+            Assert(lv1.ok && lv2.ok, "E0_UpgradeViaAuthority",
+                $"两次升级均经 EquipmentProgression.TryUpgrade 成功：{lv1.reason}；{lv2.reason}");
+            Assert(equipment.GetLevel(EquipmentLine.Drill) == 2, "E0_DrillLv2",
+                "Vertical Slice 开始前已合法达到 Drill Lv2");
+            Assert(cashBefore - gm.Cash == expectedCost, "E0_CashSpent",
+                $"Cash 按 EquipmentCatalog 成本扣除：${cashBefore}→${gm.Cash}（-${expectedCost}）");
+            Assert(gm.Upgrades == null || gm.Upgrades.DrillLevel == 1, "E0_LegacyUpgradeUntouched",
+                $"旧 UpgradeSystem 未被写入（Drill Lv{(gm.Upgrades != null ? gm.Upgrades.DrillLevel : -1)}）");
         }
 
         // ---------- E1 地表基线 ----------
@@ -181,21 +212,17 @@ namespace Ashfall
             Assert(vehicle.Fuel < fuelStart - 0.1f, "E3_FuelDrained", $"真实挖矿耗油：{fuelStart:0.0}→{vehicle.Fuel:0.0}（DrainFuel 计入）");
         }
 
-        // ---------- E4 高值 Emerald → HandleTileDug 顶掉最低密度 Iron ----------
+        // ---------- E4 高值 Copper → HandleTileDug 顶掉最低密度 Iron ----------
         IEnumerator E4_CargoReplacement(GameManager gm)
         {
-            sb.AppendLine("\n== E4. Cargo 选择：挖到高值 Emerald → 顶掉最低密度 Iron（丢铁矿换钻石）==");
-            // 高值深矿(Emerald hardness=3)需更高钻头；此处体现「已升级 Drill→Lv3」后再深入挖高值矿（同 DEV-014 Slice 脚手架）。
-            var gmU = gm != null ? gm.Upgrades : null;
-            if (gmU != null) gmU.drillLevel = 3;
-            yield return new WaitForFixedUpdate();
+            sb.AppendLine($"\n== E4. Cargo 选择：挖到高值 {highValueOre.displayName} → 顶掉最低密度 Iron ==");
             int ironBefore = CountDef(iron);
             int cargoValueBefore = vehicle.CargoValue;
-            float weightBefore = vehicle.CargoWeight;
-            bool emeraldIn = false;
+            bool highValueOreMined = false;
 
-            // 舱已满载，现在挖紧邻的 Emerald（weight 2.2 / value 480）→ HandleTileDug 丢 Iron 腾位
-            Vector2Int cell = new Vector2Int(EmeraldX, OreRowY);
+            // 舱已满载，现在挖紧邻高值矿 → HandleTileDug 丢 Iron 腾位。
+            // 该矿 hardness=1，可由正式起始能力开采；地下阶段绝不写 UpgradeSystem / Equipment level。
+            Vector2Int cell = new Vector2Int(HighValueOreX, OreRowY);
             if (grid.IsSolid(cell.x, cell.y))
             {
                 int guard = 0;
@@ -205,9 +232,9 @@ namespace Ashfall
                     res = vehicle.TryDigHit(cell);
                     yield return new WaitForFixedUpdate();
                 } while (res == DigHitResult.Hit && ++guard < 16 && grid.IsSolid(cell.x, cell.y));
-                emeraldIn = !grid.IsSolid(cell.x, cell.y);
+                highValueOreMined = !grid.IsSolid(cell.x, cell.y);
             }
-            Assert(emeraldIn, "E4_EmeraldMined", "真实挖到紧邻高值 Emerald（块已开采）");
+            Assert(highValueOreMined, "E4_HighValueOreMined", $"真实挖到紧邻高值 {highValueOre.displayName}（块已开采）");
             int cargoValueAfter = vehicle.CargoValue;
             float weightAfter = vehicle.CargoWeight;
             // HandleTileDug：高密度 incoming 顶掉舱内最低密度堆 → 总价值跳升
@@ -218,7 +245,7 @@ namespace Ashfall
             // 低值铁被顶掉一部分
             int ironAfter = CountDef(iron);
             Assert(ironAfter < ironBefore, "E4_IronDropped", $"Iron {ironBefore} → {ironAfter}（低密度被顶替给高值腾位）");
-            Assert(CountDef(emerald) > 0, "E4_EmeraldInCargo", "Emerald 已入 Cargo");
+            Assert(CountDef(highValueOre) > 0, "E4_HighValueOreInCargo", $"{highValueOre.displayName} 已入 Cargo");
         }
 
         // ---------- E5 返航决策：剩余燃料够安全返航 ----------

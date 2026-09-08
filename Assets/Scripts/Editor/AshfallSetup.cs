@@ -31,23 +31,23 @@ namespace Ashfall.EditorTools
             var lava = MakeTile("Lava_熔岩", new Color(1f, 0.27f, 0f), 1, 0.30f, 0, true, true, 25);
 
             // ---- 矿物（深度越深越值钱）----
-            // 【v2 价值曲线】12 → 40 → 130 → 400 → 900 → 2200 → 5000 → 11000 → 40000
-            // 倍率 ×3.3 → ×3.25 → ×3.1 → ×2.25 → ×2.4 → ×2.3 → ×2.2 → ×3.6，
-            // 平均约 ×2.8/档，平滑无断层；核心矿作为终局大奖允许跳涨。
+            // 【DEV-015 校准后价值曲线】12 → 40 → 130 → 260 → 480 → 900 → 1300 → 2600 → 40000
+            // 倍率 ×3.3 → ×3.25 → ×2.0 → ×1.85 → ×1.88 → ×1.44 → ×2.0 → ×15.4(终局核心矿)。
+            // 中段(Gold 260 起)有意收窄，避免一次暴富；核心矿作为终局大奖允许跳涨。
             //
             // 【v3 重量曲线】越值钱越重（1.0 → 4.5），但【价值密度】单调递增：
-            //   12  40   130  400   900   2200  5000   11000  40000   （单价）
-            //   1.0 1.2  1.5  1.9   2.2   2.6   3.0    3.5    4.5     （重量）
-            //   12  33   87   210   409   846   1667   3143   8889    （单价÷重量）
+            //   12  40   130  260   480   900   1300  2600   40000   （单价）
+            //   1.0 1.2  1.5  1.9   2.2   2.6   3.0   3.5    4.5     （重量）
+            //   12  33   87   137   218   346   433   743    8889    （单价÷重量）
             // 密度递增 ⇒ 满舱时「丢铁矿换钻石」永远是最优解，这正是 Motherload 的取舍手感。
             var iron = MakeTile("Iron_铁矿", new Color(0.63f, 0.61f, 0.58f), 1, 0.30f, 12, true, false, 0, 1.0f, "iron_ore");
             var copper = MakeTile("Copper_铜矿", new Color(0.72f, 0.45f, 0.20f), 1, 0.35f, 40, true, false, 0, 1.2f);
             var silver = MakeTile("Silver_银矿", new Color(0.75f, 0.75f, 0.78f), 2, 0.40f, 130, true, false, 0, 1.5f);
-            var gold = MakeTile("Gold_金矿", new Color(1f, 0.84f, 0f), 2, 0.45f, 400, true, false, 0, 1.9f);
-            var emerald = MakeTile("Emerald_绿宝石", new Color(0.31f, 0.78f, 0.47f), 3, 0.55f, 900, true, false, 0, 2.2f);
-            var platinum = MakeTile("Platinum_铂金", new Color(0.90f, 0.89f, 0.89f), 3, 0.50f, 2200, true, false, 0, 2.6f);
-            var ruby = MakeTile("Ruby_红宝石", new Color(0.88f, 0.07f, 0.37f), 4, 0.60f, 5000, true, false, 0, 3.0f);
-            var diamond = MakeTile("Diamond_钻石", new Color(0.73f, 0.95f, 1f), 4, 0.70f, 11000, true, false, 0, 3.5f);
+            var gold = MakeTile("Gold_金矿", new Color(1f, 0.84f, 0f), 2, 0.45f, 260, true, false, 0, 1.9f);
+            var emerald = MakeTile("Emerald_绿宝石", new Color(0.31f, 0.78f, 0.47f), 3, 0.55f, 480, true, false, 0, 2.2f);
+            var platinum = MakeTile("Platinum_铂金", new Color(0.90f, 0.89f, 0.89f), 3, 0.50f, 900, true, false, 0, 2.6f);
+            var ruby = MakeTile("Ruby_红宝石", new Color(0.88f, 0.07f, 0.37f), 4, 0.60f, 1300, true, false, 0, 3.0f);
+            var diamond = MakeTile("Diamond_钻石", new Color(0.73f, 0.95f, 1f), 4, 0.70f, 2600, true, false, 0, 3.5f);
             var coreOre = MakeTile("Ashfall_核心矿", new Color(1f, 0.27f, 0.95f), 5, 1.00f, 40000, true, false, 0, 4.5f);
 
             // ---- 数据库与分层 ----

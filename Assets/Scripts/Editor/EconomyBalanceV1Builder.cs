@@ -13,8 +13,9 @@ namespace Ashfall.EditorTools
     /// 场景内容（只复用现代 DEV 栈，无第二套系统）：
     ///  - DigGrid（width=32, depth=44, 固定 seed，无随机矿/空间/节点生成器 → 全地层填充物）；
     ///  - 中心 3 列宽竖井从地表坑口(y≤2)预清通到浅层画廊(y≈20) → 载具纯竖直真实下潜，消除穿岩几何不确定性；
-    ///  - 画廊下层排列「低值铁矿 pocket」（Lv0 载重 24 → 24 铁 = 满载）+ 紧邻 1 格高值 Emerald（替换触发）；
-    ///  - 真实 DrillVehicle（Hover）+ MiningFeelController + OreScanner + GameManager(UpgradeSystem/Equipment/RunRisk) + SellTerminal + EconomyBalanceV1Probe。
+    ///  - 地表 Workbench + 起始 Cash：探针在 Run 前经 EquipmentProgression.TryUpgrade 合法准备 Drill Lv2；
+    ///  - 画廊下层排列「低值铁矿 pocket」（Lv0 载重 24 → 24 铁 = 满载）+ 紧邻 1 格高值 Copper（替换触发）；
+    ///  - 真实 DrillVehicle（Hover）+ MiningFeelController + OreScanner + GameManager(UpgradeSystem/Equipment/RunRisk) + Workbench + SellTerminal + EconomyBalanceV1Probe。
     /// 玩家只走真实物理移动（下潜/返航）沿已清通通道；挖矿用真实 TryDigHit→HandleTileDug→InventoryGrid。
     /// 本场景刻意不挂任何生成器/节点/遗迹，保证「低值填满→高值顶替」经济场景 100% 可复现。
     /// </summary>
@@ -32,7 +33,6 @@ namespace Ashfall.EditorTools
         const int OreRowY = GalleryY + 5;  // 低值铁排所在行（站台下 5 格，挖得到且不挡移动）
         const int IronCount = 30;          // 铁排格数（>24 → 必能填满 Lv0 载重）
         const int IronStartX = Center - 14;  // x=18，落在 bedrock(1..62) 内
-        const int EmeraldX = IronStartX + IronCount;  // x=48，铁排紧邻右侧
 
         [MenuItem("灰烬之下/搭建 DEV-015 经济平衡测试场景")]
         public static void Build()
@@ -41,12 +41,12 @@ namespace Ashfall.EditorTools
             var dirt = AssetDatabase.LoadAssetAtPath<TileDefinition>($"{DataFolder}/Dirt_泥土.asset");
             var iron = AssetDatabase.LoadAssetAtPath<TileDefinition>($"{DataFolder}/Iron_铁矿.asset");
             var tin = AssetDatabase.LoadAssetAtPath<TileDefinition>($"{DataFolder}/Tin_锡矿.asset");
-            var emerald = AssetDatabase.LoadAssetAtPath<TileDefinition>($"{DataFolder}/Emerald_绿宝石.asset");
+            var copper = AssetDatabase.LoadAssetAtPath<TileDefinition>($"{DataFolder}/Copper_铜矿.asset");
             var gold = AssetDatabase.LoadAssetAtPath<TileDefinition>($"{DataFolder}/Gold_金矿.asset");
             var bedrock = db != null ? db.bedrockTile : null;
             var emptyTile = db != null ? db.emptyTile : null;
 
-            if (db == null || dirt == null || iron == null || tin == null || emerald == null || gold == null
+            if (db == null || dirt == null || iron == null || tin == null || copper == null || gold == null
                 || bedrock == null || emptyTile == null)
             {
                 Debug.LogError("[DEV-015] 必要资产缺失。请先运行 Tools/Ashfall/一键生成默认方块与数据库");
@@ -59,6 +59,8 @@ namespace Ashfall.EditorTools
 
             // ---- Grid + Tilemaps ----
             var gridGo = new GameObject("Grid");
+            // DigGrid.Awake 会立即生成地图；先保持 inactive，等数据库和 Tilemap 引用配置完成再启用。
+            gridGo.SetActive(false);
             var ugrid = gridGo.AddComponent<Grid>();
             ugrid.cellSize = Vector3.one; ugrid.cellGap = Vector3.zero;
             ugrid.cellLayout = GridLayout.CellLayout.Rectangle;
@@ -86,7 +88,7 @@ namespace Ashfall.EditorTools
             // 刻意不挂任何 OreVeinGenerator / UndergroundSpaceGenerator / RuinGenerator / DiscoveryNodeGenerator
             // → Generate 走 veinMode=false/spaceMode=false 分支：纯 strata 填充物 + 中心坑口留空。
 
-            digGrid.RegenerateFromDatabase();
+            gridGo.SetActive(true);
 
             // 背景 Dirt
             var bgTex = new Texture2D(1, 1, TextureFormat.RGBA32, false);
@@ -134,8 +136,19 @@ namespace Ashfall.EditorTools
             var gm = gmGo.AddComponent<GameManager>();
             gm.spawnPoint = playerGo.transform.position;
             gm.usePlayerStartAsSpawn = true;
-            gm.startingCash = 0;
+            // 前置资金代表已完成的早期 Run；探针必须在 Surface / Workbench 通过正式交易花掉，
+            // 不允许直接写任何装备等级。Drill Lv1 + Lv2 = 150 + 500。
+            gm.startingCash = EquipmentCatalog.CostOf(EquipmentLine.Drill, 1)
+                            + EquipmentCatalog.CostOf(EquipmentLine.Drill, 2);
             gmGo.AddComponent<BlockDropHook>().grid = digGrid;
+
+            // ---- UpgradeWorkbench（Vertical Slice 开始前合法准备装备）----
+            var workbenchGo = new GameObject("UpgradeWorkbench");
+            var workbenchCollider = workbenchGo.AddComponent<BoxCollider2D>();
+            workbenchCollider.size = new Vector2(3f, 2f);
+            workbenchCollider.isTrigger = true;
+            workbenchGo.transform.position = digGrid.GridToWorld(Center, 1);
+            workbenchGo.AddComponent<UpgradeWorkbench>();
 
             // ---- SellTerminal（返航售货 → Run 收官）----
             var sellGo = new GameObject("SellTerminal");
@@ -152,7 +165,7 @@ namespace Ashfall.EditorTools
             probe.equipment = gm.Equipment;
             probe.oreScanner = playerGo.GetComponent<OreScanner>();
             probe.iron = iron;
-            probe.emerald = emerald;
+            probe.highValueOre = copper;
             probe.gold = gold;
             probe.dirt = dirt;
             probe.emptyTile = emptyTile;

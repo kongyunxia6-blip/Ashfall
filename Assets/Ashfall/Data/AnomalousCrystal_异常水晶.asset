@@ -1,0 +1,29 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 18c8a4b065a0d4347aeb5af2bee05a73, type: 3}
+  m_Name: "AnomalousCrystal_\u5F02\u5E38\u6C34\u6676"
+  m_EditorClassIdentifier: Assembly-CSharp::Ashfall.TileDefinition
+  displayName: "AnomalousCrystal_\u5F02\u5E38\u6C34\u6676"
+  color: {r: 0.95, g: 0.3, b: 0.7, a: 1}
+  hardness: 4
+  digHits: 1
+  drillTime: 0.59
+  value: 1100
+  weight: 0.8
+  stackLimit: 16
+  gridWidth: 1
+  isSolid: 1
+  isHazard: 0
+  hazardDamage: 0
+  dropId: 
+  blockType: 0
+  visualProfile: {fileID: 0}
