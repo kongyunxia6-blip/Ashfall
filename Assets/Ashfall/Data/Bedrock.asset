@@ -25,4 +25,5 @@ MonoBehaviour:
   isHazard: 0
   hazardDamage: 0
   dropId: 
-  visualProfile: {fileID: 0}
+  blockType: 0
+  visualProfile: {fileID: 11400000, guid: bc49db8e5d51ac44db94536c575bc9fa, type: 2}
