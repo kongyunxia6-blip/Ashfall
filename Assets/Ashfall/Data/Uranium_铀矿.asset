@@ -10,19 +10,20 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 18c8a4b065a0d4347aeb5af2bee05a73, type: 3}
-  m_Name: "Diamond_\u94BB\u77F3"
+  m_Name: "Uranium_\u94C0\u77FF"
   m_EditorClassIdentifier: Assembly-CSharp::Ashfall.TileDefinition
-  displayName: "Diamond_\u94BB\u77F3"
-  color: {r: 0.73, g: 0.95, b: 1, a: 1}
-  hardness: 4
+  displayName: "Uranium_\u94C0\u77FF"
+  color: {r: 0.4, g: 0.75, b: 0.3, a: 1}
+  hardness: 3
   digHits: 1
-  drillTime: 0.7
-  value: 2600
-  weight: 3.5
+  drillTime: 0.51
+  value: 780
+  weight: 2.4
   stackLimit: 16
   gridWidth: 1
   isSolid: 1
-  isHazard: 0
-  hazardDamage: 0
+  isHazard: 1
+  hazardDamage: 6
   dropId: 
+  blockType: 0
   visualProfile: {fileID: 0}

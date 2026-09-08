@@ -82,8 +82,13 @@ namespace Ashfall
         public DigGrid grid;
 
         [Header("深度带（数据驱动，集中配置）")]
-        [Tooltip("按深度从小到大排列的矿脉带。每条带独立矿物权重 / 矿脉尺寸 / 频率")]
+        [Tooltip("按深度从小到大排列的矿脉带。每条带独立矿物权重 / 矿脉尺寸 / 频率。" +
+                 "DEV-015：可引用 OreRegionPreset 权威资产；bands 为空时自动用 preset.bands")]
         public OreDepthBand[] bands;
+
+        [Tooltip("DEV-015：矿脉/经济分层的权威配置资产。bands 数组为空时回退到 preset.bands，" +
+                 "供回归/模拟从同一权威源读取（消除第二份硬编码）。")]
+        public OreRegionPreset preset;
 
         [Header("保留区（矿脉禁止进入）")]
         [Tooltip("矩形保留区（网格坐标）。地表 Hub / 出生点 / 下矿竖井 / 测试手工布局都应加进来")]
@@ -113,13 +118,21 @@ namespace Ashfall
             ? seedOverride
             : (grid != null ? grid.seed : 0);
 
+        /// <summary>
+        /// 实际生效的带数组：优先本组件手写 bands；为空则回退到 preset 权威资产。
+        /// 这样既有手写 bands 的场景（DEV-007~014 测试）零回归，新场景/模拟/回归可从 preset 读取。
+        /// </summary>
+        public OreDepthBand[] EffectiveBands
+            => (bands != null && bands.Length > 0) ? bands : (preset != null ? preset.bands : null);
+
         /// <summary>是否已配置至少一个有效带（带含 ≥1 种矿）。</summary>
         public bool HasBands
         {
             get
             {
-                if (bands == null) return false;
-                foreach (var b in bands)
+                var list = EffectiveBands;
+                if (list == null) return false;
+                foreach (var b in list)
                     if (b != null && b.ores != null && b.ores.Length > 0) return true;
                 return false;
             }
@@ -145,17 +158,21 @@ namespace Ashfall
             SubMinDiscards = 0;
             if (!HasBands) return;
 
+            var effectiveBands = EffectiveBands;
             var rng = new System.Random(EffectiveSeed);
 
-            foreach (var band in bands)
+            if (effectiveBands != null)
             {
-                if (band == null || band.ores == null || band.ores.Length == 0) continue;
+                foreach (var band in effectiveBands)
+                {
+                    if (band == null || band.ores == null || band.ores.Length == 0) continue;
 
-                // 期望起点数 = 带深度跨度 × 每格深度频率（clamp 避免小图爆量）
-                int attempts = Mathf.Clamp(
-                    Mathf.RoundToInt(band.DepthSpan * band.veinFrequency), 0, 512);
-                for (int a = 0; a < attempts; a++)
-                    TryGrowVein(band, rng);
+                    // 期望起点数 = 带深度跨度 × 每格深度频率（clamp 避免小图爆量）
+                    int attempts = Mathf.Clamp(
+                        Mathf.RoundToInt(band.DepthSpan * band.veinFrequency), 0, 512);
+                    for (int a = 0; a < attempts; a++)
+                        TryGrowVein(band, rng);
+                }
             }
         }
 

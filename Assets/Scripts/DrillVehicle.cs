@@ -675,9 +675,14 @@ namespace Ashfall
                 // 无中继系统 → 落回普通块（零回归安全兜底）
             }
 
-            int drillLevel = upgrades != null ? upgrades.DrillLevel : 1;
-            // DEV-010：装备成长模式没有额外硬度门槛语义（各 tile 仍按原 hardness 判定，
-            // 测试场景 tile hardness=1 → Lv 恒通过）。永不改变「一次命中 1 Block」规则。
+            // DEV-015 Blocker3 根治：钻头硬度门槛的属性源与 MaxFuel/Cargo/速度一致——
+            // 存在 EquipmentProgression 时读其 Drill 线等级（EP 是装备成长唯一权威），否则才回退
+            // 旧 UpgradeSystem（无 equipment 的旧场景零回归）。EP drillLevel 0 视为出厂可挖 hardness 1
+            // （与旧 UpgradeSystem 默认 drillLevel=1 语义对齐），故取 Max(1, level)。
+            int drillLevel = equipment != null
+                ? Mathf.Max(1, equipment.GetLevel(EquipmentLine.Drill))
+                : (upgrades != null ? upgrades.DrillLevel : 1);
+            // DEV-010：永不改变「一次命中 1 Block」规则；硬度门槛随装备源判定，tile hardness>钻头Lv 则拒挖。
             if (tdef.hardness > drillLevel)
             {
                 ResetDig();
