@@ -100,12 +100,22 @@ namespace Ashfall.EditorTools
             vehicle.startMode = DrillVehicle.MovementMode.Hover;
             vehicle.startJetting = false;
 
-            // ---- 4. 总控 ----
+            // ---- 4. 总控（对齐 EconomyBalanceV1Test 权威 GameManager 配置）----
+            // DEV-011/DEV-016：补 RunRiskState + DepthRegionProgression + EquipmentProgression + BlockDropHook，
+            // 使正式 Run 生命周期闭环成立（离 Hub 自动 BeginRun → 下矿维护风险 → Sell 结算 → Run end）。
             var gmGo = new GameObject("GameManager");
             gmGo.AddComponent<UpgradeSystem>();
+            gmGo.AddComponent<EquipmentProgression>();   // DEV-010 装备成长权威（DrillVehicle 无 EP 时回退 UpgradeSystem）
             gmGo.AddComponent<GameHUD>();
             gmGo.AddComponent<InventoryPanel>();
+            gmGo.AddComponent<BlockDropHook>();          // DEV-001 通用掉落派发（grid 留空自动 FindFirst<DigGrid>）
             var gm = gmGo.AddComponent<GameManager>();
+            // RunRisk 状态机（同体，字段留空 → Start 自动 GetComponent GameManager/DRP/Player）
+            gmGo.AddComponent<RunRiskState>();
+            // 深度/区域权威：必须显式拖 grid（DRP 挂 GameManager 同体时 GetComponent<DigGrid>() 为 null，
+            // 不接线则深度/风险结算失效；vehicle 走 FindFirst 自动找）
+            var drp = gmGo.AddComponent<DepthRegionProgression>();
+            drp.grid = digGrid;
             gm.spawnPoint = new Vector3(spawnX, 1f, 0f);
             gm.usePlayerStartAsSpawn = true;
             gm.startingCash = 100;
