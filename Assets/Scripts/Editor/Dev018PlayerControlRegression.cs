@@ -64,6 +64,11 @@ namespace Ashfall.EditorTools
                 var scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
                 Check(scene.IsValid() && scene.isLoaded, "WorldScene_Loaded", "WorldGenV1 重建后可打开");
 
+                // Editor 回归不会自动进入 Play，因此显式执行权威总控初始化，确保下游断言读取的
+                // Equipment / RunRisk 与实际 Play 时 GameManager.Awake 后的状态一致。
+                var gameManager = UnityEngine.Object.FindFirstObjectByType<GameManager>();
+                if (gameManager != null) Invoke(gameManager, "Awake");
+
                 ValidateSceneComposition();   // 回归 1、2、9
                 ValidateMovementModeBranch(); // 回归 3、4
                 ValidateMiningRules();        // 回归 5、6、7

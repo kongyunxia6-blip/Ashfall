@@ -119,7 +119,7 @@ NavMeshSettings:
     debug:
       m_Flags: 0
   m_NavMeshData: {fileID: 0}
---- !u!1 &400960882
+--- !u!1 &3871574
 GameObject:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -127,9 +127,100 @@ GameObject:
   m_PrefabAsset: {fileID: 0}
   serializedVersion: 6
   m_Component:
-  - component: {fileID: 400960885}
-  - component: {fileID: 400960884}
-  - component: {fileID: 400960883}
+  - component: {fileID: 3871577}
+  - component: {fileID: 3871576}
+  - component: {fileID: 3871575}
+  m_Layer: 0
+  m_Name: SurfaceHubZone
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &3871575
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3871574}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: dba3dac4d9b14634c9c6d051f7ad1379, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Ashfall.SurfaceHubZone
+--- !u!61 &3871576
+BoxCollider2D:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3871574}
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Density: 1
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_ForceSendLayers:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  m_ForceReceiveLayers:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  m_ContactCaptureLayers:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  m_CallbackLayers:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  m_IsTrigger: 1
+  m_UsedByEffector: 0
+  m_CompositeOperation: 0
+  m_CompositeOrder: 0
+  m_Offset: {x: 0, y: 0}
+  m_SpriteTilingProperty:
+    border: {x: 0, y: 0, z: 0, w: 0}
+    pivot: {x: 0, y: 0}
+    oldSize: {x: 0, y: 0}
+    newSize: {x: 0, y: 0}
+    adaptiveTilingThreshold: 0
+    drawMode: 0
+    adaptiveTiling: 0
+  m_AutoTiling: 0
+  m_Size: {x: 48, y: 5}
+  m_EdgeRadius: 0
+--- !u!4 &3871577
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3871574}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 24, y: -1, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &261902777
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 261902780}
+  - component: {fileID: 261902779}
+  - component: {fileID: 261902778}
   m_Layer: 0
   m_Name: SurfaceBase
   m_TagString: Untagged
@@ -137,13 +228,13 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!114 &400960883
+--- !u!114 &261902778
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 400960882}
+  m_GameObject: {fileID: 261902777}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: b6ace94bab44fb8468ed0461a892b391, type: 3}
@@ -152,13 +243,13 @@ MonoBehaviour:
   serviceInterval: 0.5
   autoSellCargo: 0
   enableAutoService: 0
---- !u!61 &400960884
+--- !u!61 &261902779
 BoxCollider2D:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 400960882}
+  m_GameObject: {fileID: 261902777}
   m_Enabled: 1
   serializedVersion: 3
   m_Density: 1
@@ -198,13 +289,13 @@ BoxCollider2D:
   m_AutoTiling: 0
   m_Size: {x: 9, y: 3}
   m_EdgeRadius: 0
---- !u!4 &400960885
+--- !u!4 &261902780
 Transform:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 400960882}
+  m_GameObject: {fileID: 261902777}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 24, y: -0.5, z: 0}
@@ -213,7 +304,7 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1 &581532442
+--- !u!1 &270388832
 GameObject:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -221,10 +312,275 @@ GameObject:
   m_PrefabAsset: {fileID: 0}
   serializedVersion: 6
   m_Component:
-  - component: {fileID: 581532444}
-  - component: {fileID: 581532445}
-  - component: {fileID: 581532446}
-  - component: {fileID: 581532443}
+  - component: {fileID: 270388835}
+  - component: {fileID: 270388834}
+  - component: {fileID: 270388833}
+  m_Layer: 0
+  m_Name: Main Camera
+  m_TagString: MainCamera
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &270388833
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 270388832}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 74695b472caaf0748b1b24691167b836, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Ashfall.CameraFollow
+  target: {fileID: 581345881}
+  stiffness: 10
+  zOffset: -10
+  orthoSize: 14
+  zoomStartDepth: 200
+  maxOrthoSize: 18
+--- !u!20 &270388834
+Camera:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 270388832}
+  m_Enabled: 1
+  serializedVersion: 2
+  m_ClearFlags: 1
+  m_BackGroundColor: {r: 0.05, g: 0.05, b: 0.08, a: 1}
+  m_projectionMatrixMode: 1
+  m_GateFitMode: 2
+  m_FOVAxisMode: 0
+  m_Iso: 200
+  m_ShutterSpeed: 0.005
+  m_Aperture: 16
+  m_FocusDistance: 10
+  m_FocalLength: 50
+  m_BladeCount: 5
+  m_Curvature: {x: 2, y: 11}
+  m_BarrelClipping: 0.25
+  m_Anamorphism: 0
+  m_SensorSize: {x: 36, y: 24}
+  m_LensShift: {x: 0, y: 0}
+  m_NormalizedViewPortRect:
+    serializedVersion: 2
+    x: 0
+    y: 0
+    width: 1
+    height: 1
+  near clip plane: 0.3
+  far clip plane: 1000
+  field of view: 60
+  orthographic: 1
+  orthographic size: 14
+  m_Depth: 0
+  m_CullingMask:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  m_RenderingPath: -1
+  m_TargetTexture: {fileID: 0}
+  m_TargetDisplay: 0
+  m_TargetEye: 3
+  m_HDR: 1
+  m_AllowMSAA: 1
+  m_AllowDynamicResolution: 0
+  m_ForceIntoRT: 0
+  m_OcclusionCulling: 1
+  m_StereoConvergence: 10
+  m_StereoSeparation: 0.022
+--- !u!4 &270388835
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 270388832}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 29.5, y: 1, z: -10}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &581345880
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 581345881}
+  - component: {fileID: 581345885}
+  - component: {fileID: 581345884}
+  - component: {fileID: 581345883}
+  - component: {fileID: 581345882}
+  m_Layer: 0
+  m_Name: Player
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &581345881
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 581345880}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 29.5, y: 0.36, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children:
+  - {fileID: 1248234594}
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &581345882
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 581345880}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d06f29268f3974647bf50fc22af24902, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Ashfall.MiningFeelController
+  grid: {fileID: 892818424}
+  attackInterval: 0.28
+  hitStopDuration: 0.04
+  recoveryTime: 0.05
+  breakExtraPause: 0.12
+  breakHitStopMultiplier: 2
+  miningSpeedMultiplier: 1
+  useUpgradeDrillSpeed: 1
+  directionSwitchThreshold: 0.45
+  maxTargetDistance: 1.65
+  showTargetHighlight: 1
+  highlightColor: {r: 1, g: 0.9, b: 0.2, a: 0.85}
+--- !u!114 &581345883
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 581345880}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a4a1e964720bc194da6dccbf13bc076e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Ashfall.DrillVehicle
+  grid: {fileID: 892818424}
+  startMode: 2
+  fallGravity: 1
+  sinkAccel: 8
+  maxFallSpeed: 7
+  startJetting: 0
+  hoverAccel: 14
+  hoverDecel: 10
+  walkAccel: 25
+  walkFriction: 30
+  airControl: 0.55
+  groundProbe: 0.06
+  hardLandingSpeed: 5
+  probeDistance: 0.7
+  baseMoveSpeed: 4
+  playerRadius: 0.36
+  fuelIdleDrain: 0.5
+  fuelMoveDrain: 1.1
+  fuelDrillDrain: 2
+  upwardFuelMultiplier: 2.2
+  rockDamage: 12
+  baseSafeDepth: 250
+  heatDamagePerDepth: 0.06
+  respawnFuelRatio: 0.6
+  respawnHullRatio: 0.5
+  weightClimbPenalty: 0.45
+  weightFuelPenalty: 0.35
+  messageThrottle: 1.5
+--- !u!58 &581345884
+CircleCollider2D:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 581345880}
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Density: 1
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_ForceSendLayers:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  m_ForceReceiveLayers:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  m_ContactCaptureLayers:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  m_CallbackLayers:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  m_IsTrigger: 0
+  m_UsedByEffector: 0
+  m_CompositeOperation: 0
+  m_CompositeOrder: 0
+  m_Offset: {x: 0, y: 0}
+  m_Radius: 0.36
+--- !u!50 &581345885
+Rigidbody2D:
+  serializedVersion: 5
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 581345880}
+  m_BodyType: 0
+  m_Simulated: 1
+  m_UseFullKinematicContacts: 0
+  m_UseAutoMass: 0
+  m_Mass: 1
+  m_LinearDamping: 0
+  m_AngularDamping: 0.05
+  m_GravityScale: 0
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_Interpolate: 1
+  m_SleepingMode: 1
+  m_CollisionDetection: 1
+  m_Constraints: 4
+--- !u!1 &892818423
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 892818425}
+  - component: {fileID: 892818426}
+  - component: {fileID: 892818427}
+  - component: {fileID: 892818424}
   m_Layer: 0
   m_Name: Tilemap
   m_TagString: Untagged
@@ -232,13 +588,13 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!114 &581532443
+--- !u!114 &892818424
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 581532442}
+  m_GameObject: {fileID: 892818423}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 51875bf39d42564419d4893bce51e683, type: 3}
@@ -246,41 +602,41 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Ashfall.DigGrid
   width: 48
   depth: 640
-  tilemap: {fileID: 581532445}
+  tilemap: {fileID: 892818426}
   database: {fileID: 11400000, guid: 442434b5ab7c21a4ca31ce4ccbb308b0, type: 2}
   useRandomSeed: 1
   seed: 12345
   surfaceOpeningHalfWidth: 4
   enableFallingRocks: 1
   rockFallChance: 0.3
-  oreVeinGenerator: {fileID: 1202896077}
+  oreVeinGenerator: {fileID: 1677406253}
   undergroundSpaceGenerator: {fileID: 0}
   ruinGenerator: {fileID: 0}
   discoveryNodeGenerator: {fileID: 0}
   backgroundTilemap: {fileID: 0}
   breakDuration: 0
---- !u!4 &581532444
+--- !u!4 &892818425
 Transform:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 581532442}
+  m_GameObject: {fileID: 892818423}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 1235783555}
+  m_Father: {fileID: 1331310125}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1839735485 &581532445
+--- !u!1839735485 &892818426
 Tilemap:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 581532442}
+  m_GameObject: {fileID: 892818423}
   m_Enabled: 1
   m_Tiles: {}
   m_AnimatedTiles: {}
@@ -312,14 +668,14 @@ Tilemap:
     e31: 0
     e32: 0
     e33: 1
---- !u!483693784 &581532446
+--- !u!483693784 &892818427
 TilemapRenderer:
   serializedVersion: 2
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 581532442}
+  m_GameObject: {fileID: 892818423}
   m_Enabled: 1
   m_CastShadows: 0
   m_ReceiveShadows: 0
@@ -368,7 +724,7 @@ TilemapRenderer:
   m_SortOrder: 0
   m_Mode: 0
   m_DetectChunkCullingBounds: 0
---- !u!1 &793633863
+--- !u!1 &895249774
 GameObject:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -376,311 +732,92 @@ GameObject:
   m_PrefabAsset: {fileID: 0}
   serializedVersion: 6
   m_Component:
-  - component: {fileID: 793633872}
-  - component: {fileID: 793633871}
-  - component: {fileID: 793633870}
-  - component: {fileID: 793633869}
-  - component: {fileID: 793633868}
-  - component: {fileID: 793633867}
-  - component: {fileID: 793633866}
-  - component: {fileID: 793633865}
-  - component: {fileID: 793633864}
+  - component: {fileID: 895249777}
+  - component: {fileID: 895249776}
+  - component: {fileID: 895249775}
   m_Layer: 0
-  m_Name: GameManager
+  m_Name: SellTerminal
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!114 &793633864
+--- !u!114 &895249775
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 793633863}
+  m_GameObject: {fileID: 895249774}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 10831ca74989f1d43b0ed6b24b5cbdb0, type: 3}
+  m_Script: {fileID: 11500000, guid: 733f3b5236e33ed44aaa8f653c4e8526, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::Ashfall.DepthRegionProgression
-  vehicle: {fileID: 0}
-  grid: {fileID: 581532443}
-  regions:
-  - regionId: Surface
-    displayName: "\u5730\u8868"
-    order: 0
-    minDepth: 0
-    maxDepth: 2
-    shortDescription: "\u5730\u8868\u636E\u70B9\u4E0E\u4E0B\u77FF\u5751\u53E3"
-    depthLabel: "\u5730\u8868 Surface"
-    spaceStartY: 0
-  - regionId: Shallow
-    displayName: "\u6D45\u5C42"
-    order: 1
-    minDepth: 3
-    maxDepth: 21
-    shortDescription: "\u9996\u6B21\u4E0B\u77FF\u533A\u57DF\uFF1A\u7A7A\u95F4\u5C11\u800C\u5C0F\uFF0C\u94C1/\u9521\u5E38\u89C1"
-    depthLabel: "\u6D45\u5C42\u5730\u5E26 Shallow"
-    spaceStartY: 5
-  - regionId: Mid
-    displayName: "\u4E2D\u5C42"
-    order: 2
-    minDepth: 22
-    maxDepth: 43
-    shortDescription: "\u7A7A\u95F4\u9891\u7387\u4E0E\u5C94\u8DEF\u589E\u52A0\uFF0C\u94DC\u6743\u91CD\u63D0\u9AD8\uFF0C\u8DEF\u7EBF\u9009\u62E9\u660E\u663E"
-    depthLabel: "\u4E2D\u5C42\u5730\u5E26 Mid"
-    spaceStartY: 22
-  - regionId: Deep
-    displayName: "\u6DF1\u5C42"
-    order: 3
-    minDepth: 44
-    maxDepth: 62
-    shortDescription: "\u7ED3\u6784\u66F4\u590D\u6742\uFF0C\u7A00\u6709\u77FF\u66F4\u53EF\u80FD\u51FA\u73B0\uFF0C\u8D44\u6E90\u4EF7\u503C\u611F\u4E0A\u5347"
-    depthLabel: "\u6DF1\u5C42\u5730\u5E26 Deep"
-    spaceStartY: 44
-  announceDuration: 2.2
---- !u!114 &793633865
-MonoBehaviour:
+  m_EditorClassIdentifier: Assembly-CSharp::Ashfall.SellTerminal
+  sellKey: 101
+  alsoRefuel: 0
+--- !u!61 &895249776
+BoxCollider2D:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 793633863}
+  m_GameObject: {fileID: 895249774}
   m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: b8be61215c4114b498d3faa2875338b6, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::Ashfall.RunRiskState
-  gameManager: {fileID: 0}
-  regionProgression: {fileID: 0}
-  vehicle: {fileID: 0}
---- !u!114 &793633866
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 793633863}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: e000ce2577156c949b0d89b7be51aa8a, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::Ashfall.GameManager
-  startingCash: 100
-  fuelPricePerUnit: 0.4
-  repairPricePerPoint: 1.5
-  salvageFeeCashRatio: 0.15
-  salvageFeeBase: 100
-  salvageFeePerDepth: 2
-  respawnDelay: 2.5
-  spawnPoint: {x: 24, y: 1, z: 0}
-  usePlayerStartAsSpawn: 1
---- !u!114 &793633867
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 793633863}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: cedbf7580e79ef94cad8619d2e62ae66, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::Ashfall.BlockDropHook
-  grid: {fileID: 0}
---- !u!114 &793633868
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 793633863}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: e84a73f7b14210549971ef74f543e14d, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::Ashfall.InventoryPanel
-  toggleKey: 105
-  slotSize: 48
-  slotSpacing: 6
-  padding: 14
---- !u!114 &793633869
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 793633863}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 44478e6e570b7bc478acb9bdefb14610, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::Ashfall.GameHUD
-  showHelp: 1
-  shopToggleKey: 117
-  regionProgression: {fileID: 0}
---- !u!114 &793633870
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 793633863}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: f8ce267e12cc88448b005941fc564162, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::Ashfall.EquipmentProgression
-  drillLevel: 0
-  fuelTankLevel: 0
-  cargoHoldLevel: 0
-  mobilityLevel: 0
-  ownedModules: 0000000000
---- !u!114 &793633871
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 793633863}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 9a165ad7fcf8e404db115fe2589fd246, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::Ashfall.UpgradeSystem
-  drillLevel: 1
-  hullLevel: 1
-  engineLevel: 1
-  fuelTankLevel: 1
-  radiatorLevel: 1
-  cargoBayLevel: 1
-  fuelPerTankLevel: 140
-  hullPerLevel: 30
-  cargoRowsPerLevel: 1
-  carryWeightPerLevel: 14
-  speedPerEngineLevel: 0.8
-  drillSpeedPerEngineLevel: 0.25
-  safeDepthPerRadiatorLevel: 70
-  costMultiplier: 1
---- !u!4 &793633872
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 793633863}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1 &817676532
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 817676535}
-  - component: {fileID: 817676534}
-  - component: {fileID: 817676533}
-  m_Layer: 0
-  m_Name: Main Camera
-  m_TagString: MainCamera
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!114 &817676533
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 817676532}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 74695b472caaf0748b1b24691167b836, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::Ashfall.CameraFollow
-  target: {fileID: 1862513326}
-  stiffness: 10
-  zOffset: -10
-  orthoSize: 14
-  zoomStartDepth: 200
-  maxOrthoSize: 18
---- !u!20 &817676534
-Camera:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 817676532}
-  m_Enabled: 1
-  serializedVersion: 2
-  m_ClearFlags: 1
-  m_BackGroundColor: {r: 0.05, g: 0.05, b: 0.08, a: 1}
-  m_projectionMatrixMode: 1
-  m_GateFitMode: 2
-  m_FOVAxisMode: 0
-  m_Iso: 200
-  m_ShutterSpeed: 0.005
-  m_Aperture: 16
-  m_FocusDistance: 10
-  m_FocalLength: 50
-  m_BladeCount: 5
-  m_Curvature: {x: 2, y: 11}
-  m_BarrelClipping: 0.25
-  m_Anamorphism: 0
-  m_SensorSize: {x: 36, y: 24}
-  m_LensShift: {x: 0, y: 0}
-  m_NormalizedViewPortRect:
+  serializedVersion: 3
+  m_Density: 1
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
     serializedVersion: 2
-    x: 0
-    y: 0
-    width: 1
-    height: 1
-  near clip plane: 0.3
-  far clip plane: 1000
-  field of view: 60
-  orthographic: 1
-  orthographic size: 14
-  m_Depth: 0
-  m_CullingMask:
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_ForceSendLayers:
     serializedVersion: 2
     m_Bits: 4294967295
-  m_RenderingPath: -1
-  m_TargetTexture: {fileID: 0}
-  m_TargetDisplay: 0
-  m_TargetEye: 3
-  m_HDR: 1
-  m_AllowMSAA: 1
-  m_AllowDynamicResolution: 0
-  m_ForceIntoRT: 0
-  m_OcclusionCulling: 1
-  m_StereoConvergence: 10
-  m_StereoSeparation: 0.022
---- !u!4 &817676535
+  m_ForceReceiveLayers:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  m_ContactCaptureLayers:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  m_CallbackLayers:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  m_IsTrigger: 1
+  m_UsedByEffector: 0
+  m_CompositeOperation: 0
+  m_CompositeOrder: 0
+  m_Offset: {x: 0, y: 0}
+  m_SpriteTilingProperty:
+    border: {x: 0, y: 0, z: 0, w: 0}
+    pivot: {x: 0, y: 0}
+    oldSize: {x: 0, y: 0}
+    newSize: {x: 0, y: 0}
+    adaptiveTilingThreshold: 0
+    drawMode: 0
+    adaptiveTiling: 0
+  m_AutoTiling: 0
+  m_Size: {x: 2, y: 2}
+  m_EdgeRadius: 0
+--- !u!4 &895249777
 Transform:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 817676532}
+  m_GameObject: {fileID: 895249774}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 24, y: 1, z: -10}
+  m_LocalPosition: {x: 16, y: 1.5, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1 &1044507295
+--- !u!1 &1248234593
 GameObject:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -688,11 +825,11 @@ GameObject:
   m_PrefabAsset: {fileID: 0}
   serializedVersion: 6
   m_Component:
-  - component: {fileID: 1044507296}
-  - component: {fileID: 1044507300}
-  - component: {fileID: 1044507299}
-  - component: {fileID: 1044507298}
-  - component: {fileID: 1044507297}
+  - component: {fileID: 1248234594}
+  - component: {fileID: 1248234598}
+  - component: {fileID: 1248234597}
+  - component: {fileID: 1248234596}
+  - component: {fileID: 1248234595}
   m_Layer: 0
   m_Name: PlayerSpineVisual
   m_TagString: Untagged
@@ -700,53 +837,53 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!4 &1044507296
+--- !u!4 &1248234594
 Transform:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1044507295}
+  m_GameObject: {fileID: 1248234593}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: -0.35, z: 0}
   m_LocalScale: {x: 0.45, y: 0.45, z: 0.45}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 1862513326}
+  m_Father: {fileID: 581345881}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &1044507297
+--- !u!114 &1248234595
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1044507295}
+  m_GameObject: {fileID: 1248234593}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 01b13898670e47148a6a1471ae0a9935, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Ashfall.PlayerSpineVisual
-  vehicle: {fileID: 1862513328}
-  mining: {fileID: 1862513327}
+  vehicle: {fileID: 581345883}
+  mining: {fileID: 581345882}
   moveThreshold: 0.08
   airborneSpeedThreshold: 0.12
   transitionDuration: 0.12
---- !u!33 &1044507298
+--- !u!33 &1248234596
 MeshFilter:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1044507295}
+  m_GameObject: {fileID: 1248234593}
   m_Mesh: {fileID: 0}
---- !u!114 &1044507299
+--- !u!114 &1248234597
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1044507295}
+  m_GameObject: {fileID: 1248234593}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: d247ba06193faa74d9335f5481b2b56c, type: 3}
@@ -783,13 +920,13 @@ MonoBehaviour:
   _animationName: idle
   loop: 1
   timeScale: 1
---- !u!23 &1044507300
+--- !u!23 &1248234598
 MeshRenderer:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1044507295}
+  m_GameObject: {fileID: 1248234593}
   m_Enabled: 1
   m_CastShadows: 1
   m_ReceiveShadows: 1
@@ -832,7 +969,7 @@ MeshRenderer:
   m_SortingOrder: 10
   m_MaskInteraction: 0
   m_AdditionalVertexStreams: {fileID: 0}
---- !u!1 &1163967950
+--- !u!1 &1269294591
 GameObject:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -840,37 +977,36 @@ GameObject:
   m_PrefabAsset: {fileID: 0}
   serializedVersion: 6
   m_Component:
-  - component: {fileID: 1163967953}
-  - component: {fileID: 1163967952}
-  - component: {fileID: 1163967951}
+  - component: {fileID: 1269294594}
+  - component: {fileID: 1269294593}
+  - component: {fileID: 1269294592}
   m_Layer: 0
-  m_Name: SellTerminal
+  m_Name: FuelStation
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!114 &1163967951
+--- !u!114 &1269294592
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1163967950}
+  m_GameObject: {fileID: 1269294591}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 733f3b5236e33ed44aaa8f653c4e8526, type: 3}
+  m_Script: {fileID: 11500000, guid: dbcc489fb2850f044bf0a85b2730f5e4, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::Ashfall.SellTerminal
-  sellKey: 101
-  alsoRefuel: 0
---- !u!61 &1163967952
+  m_EditorClassIdentifier: Assembly-CSharp::Ashfall.FuelStation
+  fuelKey: 101
+--- !u!61 &1269294593
 BoxCollider2D:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1163967950}
+  m_GameObject: {fileID: 1269294591}
   m_Enabled: 1
   serializedVersion: 3
   m_Density: 1
@@ -910,22 +1046,22 @@ BoxCollider2D:
   m_AutoTiling: 0
   m_Size: {x: 2, y: 2}
   m_EdgeRadius: 0
---- !u!4 &1163967953
+--- !u!4 &1269294594
 Transform:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1163967950}
+  m_GameObject: {fileID: 1269294591}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 16, y: 1.5, z: 0}
+  m_LocalPosition: {x: 32, y: 1.5, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1 &1202896076
+--- !u!1 &1331310124
 GameObject:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -933,8 +1069,54 @@ GameObject:
   m_PrefabAsset: {fileID: 0}
   serializedVersion: 6
   m_Component:
-  - component: {fileID: 1202896078}
-  - component: {fileID: 1202896077}
+  - component: {fileID: 1331310125}
+  - component: {fileID: 1331310126}
+  m_Layer: 0
+  m_Name: Grid
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1331310125
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1331310124}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children:
+  - {fileID: 892818425}
+  - {fileID: 1677406254}
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!156049354 &1331310126
+Grid:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1331310124}
+  m_Enabled: 1
+  m_CellSize: {x: 1, y: 1, z: 1}
+  m_CellGap: {x: 0, y: 0, z: 0}
+  m_CellLayout: 0
+  m_CellSwizzle: 0
+--- !u!1 &1677406252
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1677406254}
+  - component: {fileID: 1677406253}
   m_Layer: 0
   m_Name: OreVeinGenerator
   m_TagString: Untagged
@@ -942,19 +1124,19 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!114 &1202896077
+--- !u!114 &1677406253
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1202896076}
+  m_GameObject: {fileID: 1677406252}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: e4ef09eb08452234ab62aa64d7b0576b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Ashfall.OreVeinGenerator
-  grid: {fileID: 581532443}
+  grid: {fileID: 892818424}
   bands: []
   preset: {fileID: 11400000, guid: 4dc2b0e37e5669245b5c63de6e6ac5e0, type: 2}
   reservedRects:
@@ -965,22 +1147,22 @@ MonoBehaviour:
     h: 12
   seedOverride: -1
   growthBackoffPerCell: 12
---- !u!4 &1202896078
+--- !u!4 &1677406254
 Transform:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1202896076}
+  m_GameObject: {fileID: 1677406252}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 1235783555}
+  m_Father: {fileID: 1331310125}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1 &1235783554
+--- !u!1 &1959233203
 GameObject:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -988,385 +1170,203 @@ GameObject:
   m_PrefabAsset: {fileID: 0}
   serializedVersion: 6
   m_Component:
-  - component: {fileID: 1235783555}
-  - component: {fileID: 1235783556}
+  - component: {fileID: 1959233212}
+  - component: {fileID: 1959233211}
+  - component: {fileID: 1959233210}
+  - component: {fileID: 1959233209}
+  - component: {fileID: 1959233208}
+  - component: {fileID: 1959233207}
+  - component: {fileID: 1959233206}
+  - component: {fileID: 1959233205}
+  - component: {fileID: 1959233204}
   m_Layer: 0
-  m_Name: Grid
+  m_Name: GameManager
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!4 &1235783555
+--- !u!114 &1959233204
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1959233203}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 10831ca74989f1d43b0ed6b24b5cbdb0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Ashfall.DepthRegionProgression
+  vehicle: {fileID: 0}
+  grid: {fileID: 892818424}
+  regions:
+  - regionId: Surface
+    displayName: "\u5730\u8868"
+    order: 0
+    minDepth: 0
+    maxDepth: 2
+    shortDescription: "\u5730\u8868\u636E\u70B9\u4E0E\u4E0B\u77FF\u5751\u53E3"
+    depthLabel: "\u5730\u8868 Surface"
+    spaceStartY: 0
+  - regionId: Shallow
+    displayName: "\u6D45\u5C42"
+    order: 1
+    minDepth: 3
+    maxDepth: 21
+    shortDescription: "\u9996\u6B21\u4E0B\u77FF\u533A\u57DF\uFF1A\u7A7A\u95F4\u5C11\u800C\u5C0F\uFF0C\u94C1/\u9521\u5E38\u89C1"
+    depthLabel: "\u6D45\u5C42\u5730\u5E26 Shallow"
+    spaceStartY: 5
+  - regionId: Mid
+    displayName: "\u4E2D\u5C42"
+    order: 2
+    minDepth: 22
+    maxDepth: 43
+    shortDescription: "\u7A7A\u95F4\u9891\u7387\u4E0E\u5C94\u8DEF\u589E\u52A0\uFF0C\u94DC\u6743\u91CD\u63D0\u9AD8\uFF0C\u8DEF\u7EBF\u9009\u62E9\u660E\u663E"
+    depthLabel: "\u4E2D\u5C42\u5730\u5E26 Mid"
+    spaceStartY: 22
+  - regionId: Deep
+    displayName: "\u6DF1\u5C42"
+    order: 3
+    minDepth: 44
+    maxDepth: 62
+    shortDescription: "\u7ED3\u6784\u66F4\u590D\u6742\uFF0C\u7A00\u6709\u77FF\u66F4\u53EF\u80FD\u51FA\u73B0\uFF0C\u8D44\u6E90\u4EF7\u503C\u611F\u4E0A\u5347"
+    depthLabel: "\u6DF1\u5C42\u5730\u5E26 Deep"
+    spaceStartY: 44
+  announceDuration: 2.2
+--- !u!114 &1959233205
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1959233203}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b8be61215c4114b498d3faa2875338b6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Ashfall.RunRiskState
+  gameManager: {fileID: 0}
+  regionProgression: {fileID: 0}
+  vehicle: {fileID: 0}
+--- !u!114 &1959233206
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1959233203}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e000ce2577156c949b0d89b7be51aa8a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Ashfall.GameManager
+  startingCash: 100
+  fuelPricePerUnit: 0.4
+  repairPricePerPoint: 1.5
+  salvageFeeCashRatio: 0.15
+  salvageFeeBase: 100
+  salvageFeePerDepth: 2
+  respawnDelay: 2.5
+  spawnPoint: {x: 29.5, y: 0.36, z: 0}
+  usePlayerStartAsSpawn: 1
+--- !u!114 &1959233207
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1959233203}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: cedbf7580e79ef94cad8619d2e62ae66, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Ashfall.BlockDropHook
+  grid: {fileID: 0}
+--- !u!114 &1959233208
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1959233203}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e84a73f7b14210549971ef74f543e14d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Ashfall.InventoryPanel
+  toggleKey: 105
+  slotSize: 48
+  slotSpacing: 6
+  padding: 14
+--- !u!114 &1959233209
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1959233203}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 44478e6e570b7bc478acb9bdefb14610, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Ashfall.GameHUD
+  showHelp: 1
+  shopToggleKey: 117
+  regionProgression: {fileID: 0}
+--- !u!114 &1959233210
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1959233203}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f8ce267e12cc88448b005941fc564162, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Ashfall.EquipmentProgression
+  drillLevel: 0
+  fuelTankLevel: 0
+  cargoHoldLevel: 0
+  mobilityLevel: 0
+  ownedModules: 0000000000
+--- !u!114 &1959233211
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1959233203}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9a165ad7fcf8e404db115fe2589fd246, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Ashfall.UpgradeSystem
+  drillLevel: 1
+  hullLevel: 1
+  engineLevel: 1
+  fuelTankLevel: 1
+  radiatorLevel: 1
+  cargoBayLevel: 1
+  fuelPerTankLevel: 140
+  hullPerLevel: 30
+  cargoRowsPerLevel: 1
+  carryWeightPerLevel: 14
+  speedPerEngineLevel: 0.8
+  drillSpeedPerEngineLevel: 0.25
+  safeDepthPerRadiatorLevel: 70
+  costMultiplier: 1
+--- !u!4 &1959233212
 Transform:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1235783554}
+  m_GameObject: {fileID: 1959233203}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children:
-  - {fileID: 581532444}
-  - {fileID: 1202896078}
-  m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!156049354 &1235783556
-Grid:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1235783554}
-  m_Enabled: 1
-  m_CellSize: {x: 1, y: 1, z: 1}
-  m_CellGap: {x: 0, y: 0, z: 0}
-  m_CellLayout: 0
-  m_CellSwizzle: 0
---- !u!1 &1862513325
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 1862513326}
-  - component: {fileID: 1862513330}
-  - component: {fileID: 1862513329}
-  - component: {fileID: 1862513328}
-  - component: {fileID: 1862513327}
-  m_Layer: 0
-  m_Name: Player
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!4 &1862513326
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1862513325}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 24, y: 1, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children:
-  - {fileID: 1044507296}
-  m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &1862513327
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1862513325}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: d06f29268f3974647bf50fc22af24902, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::Ashfall.MiningFeelController
-  grid: {fileID: 581532443}
-  attackInterval: 0.28
-  hitStopDuration: 0.04
-  recoveryTime: 0.05
-  breakExtraPause: 0.12
-  breakHitStopMultiplier: 2
-  miningSpeedMultiplier: 1
-  useUpgradeDrillSpeed: 1
-  directionSwitchThreshold: 0.45
-  maxTargetDistance: 1.65
-  showTargetHighlight: 1
-  highlightColor: {r: 1, g: 0.9, b: 0.2, a: 0.85}
---- !u!114 &1862513328
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1862513325}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: a4a1e964720bc194da6dccbf13bc076e, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::Ashfall.DrillVehicle
-  grid: {fileID: 581532443}
-  startMode: 0
-  fallGravity: 1
-  sinkAccel: 8
-  maxFallSpeed: 7
-  startJetting: 0
-  hoverAccel: 14
-  hoverDecel: 10
-  walkAccel: 25
-  walkFriction: 30
-  airControl: 0.55
-  groundProbe: 0.06
-  hardLandingSpeed: 5
-  probeDistance: 0.7
-  baseMoveSpeed: 4
-  playerRadius: 0.36
-  fuelIdleDrain: 0.5
-  fuelMoveDrain: 1.1
-  fuelDrillDrain: 2
-  upwardFuelMultiplier: 2.2
-  rockDamage: 12
-  baseSafeDepth: 250
-  heatDamagePerDepth: 0.06
-  respawnFuelRatio: 0.6
-  respawnHullRatio: 0.5
-  weightClimbPenalty: 0.45
-  weightFuelPenalty: 0.35
-  messageThrottle: 1.5
---- !u!58 &1862513329
-CircleCollider2D:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1862513325}
-  m_Enabled: 1
-  serializedVersion: 3
-  m_Density: 1
-  m_Material: {fileID: 0}
-  m_IncludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_ExcludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_LayerOverridePriority: 0
-  m_ForceSendLayers:
-    serializedVersion: 2
-    m_Bits: 4294967295
-  m_ForceReceiveLayers:
-    serializedVersion: 2
-    m_Bits: 4294967295
-  m_ContactCaptureLayers:
-    serializedVersion: 2
-    m_Bits: 4294967295
-  m_CallbackLayers:
-    serializedVersion: 2
-    m_Bits: 4294967295
-  m_IsTrigger: 0
-  m_UsedByEffector: 0
-  m_CompositeOperation: 0
-  m_CompositeOrder: 0
-  m_Offset: {x: 0, y: 0}
-  m_Radius: 0.36
---- !u!50 &1862513330
-Rigidbody2D:
-  serializedVersion: 5
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1862513325}
-  m_BodyType: 0
-  m_Simulated: 1
-  m_UseFullKinematicContacts: 0
-  m_UseAutoMass: 0
-  m_Mass: 1
-  m_LinearDamping: 0
-  m_AngularDamping: 0.05
-  m_GravityScale: 0
-  m_Material: {fileID: 0}
-  m_IncludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_ExcludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_Interpolate: 1
-  m_SleepingMode: 1
-  m_CollisionDetection: 1
-  m_Constraints: 4
---- !u!1 &1959048411
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 1959048414}
-  - component: {fileID: 1959048413}
-  - component: {fileID: 1959048412}
-  m_Layer: 0
-  m_Name: FuelStation
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!114 &1959048412
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1959048411}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: dbcc489fb2850f044bf0a85b2730f5e4, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::Ashfall.FuelStation
-  fuelKey: 101
---- !u!61 &1959048413
-BoxCollider2D:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1959048411}
-  m_Enabled: 1
-  serializedVersion: 3
-  m_Density: 1
-  m_Material: {fileID: 0}
-  m_IncludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_ExcludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_LayerOverridePriority: 0
-  m_ForceSendLayers:
-    serializedVersion: 2
-    m_Bits: 4294967295
-  m_ForceReceiveLayers:
-    serializedVersion: 2
-    m_Bits: 4294967295
-  m_ContactCaptureLayers:
-    serializedVersion: 2
-    m_Bits: 4294967295
-  m_CallbackLayers:
-    serializedVersion: 2
-    m_Bits: 4294967295
-  m_IsTrigger: 1
-  m_UsedByEffector: 0
-  m_CompositeOperation: 0
-  m_CompositeOrder: 0
-  m_Offset: {x: 0, y: 0}
-  m_SpriteTilingProperty:
-    border: {x: 0, y: 0, z: 0, w: 0}
-    pivot: {x: 0, y: 0}
-    oldSize: {x: 0, y: 0}
-    newSize: {x: 0, y: 0}
-    adaptiveTilingThreshold: 0
-    drawMode: 0
-    adaptiveTiling: 0
-  m_AutoTiling: 0
-  m_Size: {x: 2, y: 2}
-  m_EdgeRadius: 0
---- !u!4 &1959048414
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1959048411}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 32, y: 1.5, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1 &2122249535
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 2122249538}
-  - component: {fileID: 2122249537}
-  - component: {fileID: 2122249536}
-  m_Layer: 0
-  m_Name: SurfaceHubZone
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!114 &2122249536
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2122249535}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: dba3dac4d9b14634c9c6d051f7ad1379, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::Ashfall.SurfaceHubZone
---- !u!61 &2122249537
-BoxCollider2D:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2122249535}
-  m_Enabled: 1
-  serializedVersion: 3
-  m_Density: 1
-  m_Material: {fileID: 0}
-  m_IncludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_ExcludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_LayerOverridePriority: 0
-  m_ForceSendLayers:
-    serializedVersion: 2
-    m_Bits: 4294967295
-  m_ForceReceiveLayers:
-    serializedVersion: 2
-    m_Bits: 4294967295
-  m_ContactCaptureLayers:
-    serializedVersion: 2
-    m_Bits: 4294967295
-  m_CallbackLayers:
-    serializedVersion: 2
-    m_Bits: 4294967295
-  m_IsTrigger: 1
-  m_UsedByEffector: 0
-  m_CompositeOperation: 0
-  m_CompositeOrder: 0
-  m_Offset: {x: 0, y: 0}
-  m_SpriteTilingProperty:
-    border: {x: 0, y: 0, z: 0, w: 0}
-    pivot: {x: 0, y: 0}
-    oldSize: {x: 0, y: 0}
-    newSize: {x: 0, y: 0}
-    adaptiveTilingThreshold: 0
-    drawMode: 0
-    adaptiveTiling: 0
-  m_AutoTiling: 0
-  m_Size: {x: 48, y: 5}
-  m_EdgeRadius: 0
---- !u!4 &2122249538
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2122249535}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 24, y: -1, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -1376,11 +1376,11 @@ Transform:
 SceneRoots:
   m_ObjectHideFlags: 0
   m_Roots:
-  - {fileID: 1235783555}
-  - {fileID: 1862513326}
-  - {fileID: 793633872}
-  - {fileID: 2122249538}
-  - {fileID: 400960885}
-  - {fileID: 1163967953}
-  - {fileID: 1959048414}
-  - {fileID: 817676535}
+  - {fileID: 1331310125}
+  - {fileID: 581345881}
+  - {fileID: 1959233212}
+  - {fileID: 3871577}
+  - {fileID: 261902780}
+  - {fileID: 895249777}
+  - {fileID: 1269294594}
+  - {fileID: 270388835}
