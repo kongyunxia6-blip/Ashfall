@@ -85,19 +85,28 @@ namespace Ashfall.EditorTools
             // 挂到 DigGrid 的生成器链（veinMode = true）
             digGrid.oreVeinGenerator = og;
 
-            // ---- 3. 玩家（坑口中心下潜入口）----
+            // ---- 3. 玩家（DEV-018：坑口边缘地表出生，Walk 脚踏实地进入矿口）----
+            // 坑口带 = 网格 x[center-halfWidth .. center+halfWidth]（中心24、半宽4 → x20..28），y≤2 挖空。
+            // 玩家不悬空出生在坑口正上方（Hover 时代可以；Walk 模式会直接坠落穿洞），而是站到坑口
+            // 右缘外第一块**实心**行0 格（网格 x=29）上，能站稳起步、往左一步即走进坑口开口坠落下潜。
+            // DEV-018 正式玩法默认 Walk（Motherload 式地面行走 + 重力坠落 + 空格喷气悬浮返航）。
+            int surfaceSpawnX = center + shaftHalf + 1;          // 24+4+1=29：坑口右缘外第一块实心行0
+            // 出生即站定：行0 顶面世界 y=0，Collider 半径 0.36 → 圆心 y=0.36（不悬空、不坠落，可站稳起步）。
+            // 圆心落在网格行 -1（地表空气带），脚下行0 实心 → 往下挖即破土进入矿口。
+            Vector3 playerSpawn = new Vector3(surfaceSpawnX + 0.5f, 0.36f, 0f);
+
             var playerGo = new GameObject("Player");
-            playerGo.transform.position = new Vector3(spawnX, 1f, 0f);
+            playerGo.transform.position = playerSpawn;
             var rb = playerGo.AddComponent<Rigidbody2D>();
-            rb.gravityScale = 0f; rb.freezeRotation = true;
+            rb.gravityScale = 0f; rb.freezeRotation = true;      // SetMovementMode 会覆写为 Walk 所需重力
             rb.interpolation = RigidbodyInterpolation2D.Interpolate;
             rb.collisionDetectionMode = CollisionDetectionMode2D.Continuous;
             var circle = playerGo.AddComponent<CircleCollider2D>();
             circle.radius = 0.36f;
             var vehicle = playerGo.AddComponent<DrillVehicle>();
             vehicle.grid = digGrid;
-            vehicle.startMode = DrillVehicle.MovementMode.Hover;
-            vehicle.startJetting = false;
+            vehicle.startMode = DrillVehicle.MovementMode.Walk;  // DEV-018：地面行走进矿口 + 喷气返航
+            vehicle.startJetting = false;                        // 脚踏实地起步，空格开喷气悬浮
             var miningFeel = playerGo.AddComponent<MiningFeelController>();
             miningFeel.grid = digGrid;
             AddPlayerVisual(playerGo, vehicle, miningFeel);
@@ -118,7 +127,7 @@ namespace Ashfall.EditorTools
             // 不接线则深度/风险结算失效；vehicle 走 FindFirst 自动找）
             var drp = gmGo.AddComponent<DepthRegionProgression>();
             drp.grid = digGrid;
-            gm.spawnPoint = new Vector3(spawnX, 1f, 0f);
+            gm.spawnPoint = playerSpawn;              // DEV-018：重生点=坑口右缘地表（与出生一致）
             gm.usePlayerStartAsSpawn = true;
             gm.startingCash = 100;
 
@@ -158,7 +167,7 @@ namespace Ashfall.EditorTools
             camGo.tag = "MainCamera";
             var cam = camGo.AddComponent<Camera>();
             cam.orthographic = true; cam.orthographicSize = 14f;
-            cam.transform.position = new Vector3(spawnX, 1f, -10f);
+            cam.transform.position = new Vector3(surfaceSpawnX + 0.5f, 1f, -10f);   // DEV-018：开局对准坑口右缘出生点
             cam.backgroundColor = new Color(0.05f, 0.05f, 0.08f);
             var follow = camGo.AddComponent<CameraFollow>();
             follow.target = playerGo.transform;
