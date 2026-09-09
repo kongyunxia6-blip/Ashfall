@@ -1,0 +1,106 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a95b5a6f6e8e93a46b0e7d7b78b21903, type: 3}
+  m_Name: OreRegionPreset_Strata
+  m_EditorClassIdentifier: Assembly-CSharp::Ashfall.OreRegionPreset
+  bands:
+  - bandName: SoilRubble
+    minDepth: 3
+    maxDepth: 99
+    ores:
+    - {fileID: 11400000, guid: 5812d7466b1b458429a83fa52030238c, type: 2}
+    - {fileID: 11400000, guid: 1d928674736e656419e33bfe1a39bf0a, type: 2}
+    - {fileID: 11400000, guid: 04ee2ad009cecf3419b33804e1dff84b, type: 2}
+    - {fileID: 11400000, guid: 48f619510b976dd4796cf9a526a1af51, type: 2}
+    - {fileID: 11400000, guid: 8b86e8df5750d194995cfe9d16e081fb, type: 2}
+    weights:
+    - 35
+    - 18
+    - 26
+    - 15
+    - 6
+    veinMinSize: 2
+    veinMaxSize: 4
+    veinFrequency: 0.55
+  - bandName: NormalRock
+    minDepth: 100
+    maxDepth: 249
+    ores:
+    - {fileID: 11400000, guid: 42a433155efb4194f920b3485a6c2e32, type: 2}
+    - {fileID: 11400000, guid: 960316743994e3e4da1e1366c81cca53, type: 2}
+    - {fileID: 11400000, guid: 48f619510b976dd4796cf9a526a1af51, type: 2}
+    - {fileID: 11400000, guid: 2bcd995ae8a65d6409d945a4a9688261, type: 2}
+    - {fileID: 11400000, guid: 04ee2ad009cecf3419b33804e1dff84b, type: 2}
+    weights:
+    - 34
+    - 28
+    - 10
+    - 18
+    - 10
+    veinMinSize: 3
+    veinMaxSize: 6
+    veinFrequency: 0.65
+  - bandName: DenseRock
+    minDepth: 250
+    maxDepth: 449
+    ores:
+    - {fileID: 11400000, guid: 960316743994e3e4da1e1366c81cca53, type: 2}
+    - {fileID: 11400000, guid: 4720bcd8abc67114197e131d0ed5472f, type: 2}
+    - {fileID: 11400000, guid: 2bcd995ae8a65d6409d945a4a9688261, type: 2}
+    - {fileID: 11400000, guid: 0fdaf079edfa9ec4091415153acadf00, type: 2}
+    - {fileID: 11400000, guid: 927ef7aa3f1bbf748947890b25d23f0f, type: 2}
+    weights:
+    - 26
+    - 24
+    - 14
+    - 20
+    - 16
+    veinMinSize: 4
+    veinMaxSize: 7
+    veinFrequency: 0.7
+  - bandName: Granite
+    minDepth: 450
+    maxDepth: 574
+    ores:
+    - {fileID: 11400000, guid: a730412145f69ad428f290d95fe4790f, type: 2}
+    - {fileID: 11400000, guid: 927ef7aa3f1bbf748947890b25d23f0f, type: 2}
+    - {fileID: 11400000, guid: 9b12752de481afd468f1aa656602f732, type: 2}
+    - {fileID: 11400000, guid: f4fdfdaec81dcac478d742a82e53b866, type: 2}
+    - {fileID: 11400000, guid: 7752d130af318c24aa3644e051cea0d4, type: 2}
+    weights:
+    - 26
+    - 22
+    - 24
+    - 18
+    - 10
+    veinMinSize: 5
+    veinMaxSize: 8
+    veinFrequency: 0.8
+  - bandName: Basalt
+    minDepth: 575
+    maxDepth: 639
+    ores:
+    - {fileID: 11400000, guid: 9b12752de481afd468f1aa656602f732, type: 2}
+    - {fileID: 11400000, guid: 7752d130af318c24aa3644e051cea0d4, type: 2}
+    - {fileID: 11400000, guid: a730412145f69ad428f290d95fe4790f, type: 2}
+    - {fileID: 11400000, guid: 927ef7aa3f1bbf748947890b25d23f0f, type: 2}
+    - {fileID: 11400000, guid: f4fdfdaec81dcac478d742a82e53b866, type: 2}
+    weights:
+    - 26
+    - 22
+    - 18
+    - 18
+    - 12
+    veinMinSize: 5
+    veinMaxSize: 8
+    veinFrequency: 0.9
+  referenceSeed: -1

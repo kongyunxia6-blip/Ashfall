@@ -287,6 +287,12 @@ namespace Ashfall
                 tilemap.SetTile(cell, GetTileForSprite(spr));
                 tilemap.SetTileFlags(cell, TileFlags.None);
                 tilemap.SetColor(cell, Color.white);   // Sprite 自带裂纹视觉，不再调色
+                // 不可挖边缘只交付一张朝向图：左边使用原图，右边水平镜像。
+                // 仅对数据库登记的 Bedrock 且仅在左右边界生效，底部基岩保持原朝向。
+                bool mirrorRightEdge = database != null && def == database.bedrockTile && x == width - 1;
+                tilemap.SetTransformMatrix(cell, mirrorRightEdge
+                    ? Matrix4x4.Scale(new Vector3(-1f, 1f, 1f))
+                    : Matrix4x4.identity);
             }
             else
             {
