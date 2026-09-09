@@ -94,13 +94,13 @@ namespace Ashfall.EditorTools
             rb.collisionDetectionMode = CollisionDetectionMode2D.Continuous;
             var circle = playerGo.AddComponent<CircleCollider2D>();
             circle.radius = 0.36f;
-            AddPlayerVisual(playerGo);
             var vehicle = playerGo.AddComponent<DrillVehicle>();
             vehicle.grid = digGrid;
             vehicle.startMode = DrillVehicle.MovementMode.Hover;
             vehicle.startJetting = false;
             var miningFeel = playerGo.AddComponent<MiningFeelController>();
             miningFeel.grid = digGrid;
+            AddPlayerVisual(playerGo, vehicle, miningFeel);
 
             // ---- 4. 总控（对齐 EconomyBalanceV1Test 权威 GameManager 配置）----
             // DEV-011/DEV-016：补 RunRiskState + DepthRegionProgression + EquipmentProgression + BlockDropHook，
@@ -183,7 +183,7 @@ namespace Ashfall.EditorTools
                       "  （未覆盖 Game.unity）");
         }
 
-        static void AddPlayerVisual(GameObject playerGo)
+        static void AddPlayerVisual(GameObject playerGo, DrillVehicle vehicle, MiningFeelController miningFeel)
         {
             const string skeletonPath = "Assets/Art/Characters/Player/Spine/PlayerMiner_SkeletonData.asset";
             var skeletonData = AssetDatabase.LoadAssetAtPath<SkeletonDataAsset>(skeletonPath);
@@ -204,7 +204,9 @@ namespace Ashfall.EditorTools
             skeleton.loop = true;
             skeleton.AnimationName = PlayerSpineVisual.IdleAnimation;
             skeleton.GetComponent<MeshRenderer>().sortingOrder = 10;
-            visualGo.AddComponent<PlayerSpineVisual>();
+            var driver = visualGo.AddComponent<PlayerSpineVisual>();
+            driver.vehicle = vehicle;
+            driver.mining = miningFeel;
         }
     }
 }
