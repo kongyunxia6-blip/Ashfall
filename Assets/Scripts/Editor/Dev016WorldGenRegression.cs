@@ -4,6 +4,7 @@ using System.IO;
 using System.Text;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.Tilemaps;
 
 namespace Ashfall.EditorTools
 {
@@ -112,8 +113,8 @@ namespace Ashfall.EditorTools
                         var b = bands[i];
                         if (b == null) { contiguous = false; eachHasOre = false; continue; }
                         if (b.ores == null || b.ores.Length == 0) eachHasOre = false;
-                        if (i > 0 && (b.minDepth <= prevMax)) contiguous = false;   // 与上带重叠
-                        if (b.minDepth < prevMax + 1) mono = false;                  // 非严格接续
+                        if (i > 0 && b.minDepth != prevMax + 1) contiguous = false; // 重叠或空洞都失败
+                        if (i > 0 && b.minDepth <= prevMax) mono = false;            // 非严格升序
                         sbB.Append($"[{b.minDepth}..{b.maxDepth}]");
                         prevMax = b.maxDepth;
                     }
@@ -126,6 +127,8 @@ namespace Ashfall.EditorTools
                     Assert(bands[bands.Length - 1].maxDepth == 639, "Preset_CoverBottom",
                         $"末带至 639（世界深 640，最底行 bedrock=639），实际 {bands[bands.Length - 1].maxDepth}");
                 }
+
+                ValidateGeneratedWorld(db, preset);
             }
             catch (Exception e)
             {
@@ -135,6 +138,90 @@ namespace Ashfall.EditorTools
             sb.AppendLine(Logs.ToString());
             sb.AppendLine($"\n==== 汇总: PASS {pass} / FAIL {fail} ====");
             Finish(sb);
+        }
+
+        static void ValidateGeneratedWorld(TileDatabase db, OreRegionPreset preset)
+        {
+            var root = new GameObject("DEV016_RegressionGrid");
+            try
+            {
+                root.AddComponent<Grid>();
+                var mapGo = new GameObject("Tilemap");
+                mapGo.transform.SetParent(root.transform);
+                var tilemap = mapGo.AddComponent<Tilemap>();
+                mapGo.AddComponent<TilemapRenderer>();
+
+                var grid = mapGo.AddComponent<DigGrid>();
+                grid.tilemap = tilemap;
+                grid.database = db;
+                grid.width = 48;
+                grid.depth = 640;
+                grid.surfaceOpeningHalfWidth = 4;
+                grid.useRandomSeed = false;
+                grid.seed = 1601;
+
+                var oreGo = new GameObject("OreVeinGenerator");
+                oreGo.transform.SetParent(root.transform);
+                var generator = oreGo.AddComponent<OreVeinGenerator>();
+                generator.grid = grid;
+                generator.preset = preset;
+                generator.seedOverride = -1;
+                generator.reservedRects = new[]
+                {
+                    new OreReservedRect { label = "Shaft", x = 18, y = 0, w = 13, h = 12 }
+                };
+                grid.oreVeinGenerator = generator;
+                grid.RegenerateFromDatabase();
+
+                bool boundaryBedrock = true;
+                bool cellsRespectBand = true;
+                bool shaftHasNoOre = true;
+                int oreCells = 0;
+                for (int y = 0; y < grid.Depth; y++)
+                for (int x = 0; x < grid.Width; x++)
+                {
+                    var tile = grid.GetTile(x, y);
+                    if ((x == 0 || x == grid.Width - 1 || y == grid.Depth - 1) && tile != db.bedrockTile)
+                        boundaryBedrock = false;
+
+                    var layer = db.GetLayerAtDepth(y);
+                    bool isBase = layer != null && layer.tiles != null && Array.IndexOf(layer.tiles, tile) >= 0;
+                    bool isInfrastructure = tile == db.emptyTile || tile == db.bedrockTile || isBase;
+                    if (!isInfrastructure)
+                    {
+                        oreCells++;
+                        OreDepthBand band = null;
+                        foreach (var candidate in preset.bands)
+                            if (candidate != null && y >= candidate.minDepth && y <= candidate.maxDepth) { band = candidate; break; }
+                        if (band == null || band.ores == null || Array.IndexOf(band.ores, tile) < 0)
+                            cellsRespectBand = false;
+                        if (x >= 18 && x < 31 && y >= 0 && y < 12)
+                            shaftHasNoOre = false;
+                    }
+                }
+
+                bool veinSizesValid = generator.Veins.Count > 0;
+                foreach (var vein in generator.Veins)
+                {
+                    OreDepthBand band = null;
+                    foreach (var candidate in preset.bands)
+                        if (candidate != null && candidate.bandName == vein.bandName) { band = candidate; break; }
+                    if (band == null || vein.cells == null || vein.cells.Count < band.veinMinSize || vein.cells.Count > band.veinMaxSize)
+                        veinSizesValid = false;
+                }
+
+                var leftMatrix = tilemap.GetTransformMatrix(new Vector3Int(0, -10, 0));
+                var rightMatrix = tilemap.GetTransformMatrix(new Vector3Int(grid.Width - 1, -10, 0));
+                Assert(boundaryBedrock, "Generated_BedrockBoundary", "真实 48×640 生成后左右边界与底行全部为 canonical bedrock");
+                Assert(leftMatrix.m00 > 0f && rightMatrix.m00 < 0f, "Generated_BedrockMirror", "左边缘原向、右边缘水平镜像");
+                Assert(oreCells > 0 && cellsRespectBand, "Generated_OresRespectBands", $"真实生成矿格 {oreCells}，全部属于所在深度带允许矿种");
+                Assert(shaftHasNoOre, "Generated_ShaftReserved", "中央竖井保留区没有矿格");
+                Assert(veinSizesValid, "Generated_VeinSizes", $"真实生成矿脉 {generator.Veins.Count} 条，尺寸均满足各带 min/max");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(root);
+            }
         }
 
         static void Finish(StringBuilder sb)

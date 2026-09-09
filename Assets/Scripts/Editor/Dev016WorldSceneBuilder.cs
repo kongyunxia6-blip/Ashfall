@@ -1,4 +1,5 @@
 #if UNITY_EDITOR
+using System;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -44,7 +45,7 @@ namespace Ashfall.EditorTools
             // ---- 1. 场景 ----
             if (!AssetDatabase.IsValidFolder(SceneFolder))
                 AssetDatabase.CreateFolder("Assets", "Scenes");
-            var scene = EditorSceneManager.NewScene(NewSceneSetup.DefaultGameObjects, NewSceneMode.Single);
+            var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
 
             // ---- 2. Grid + Tilemap + DigGrid（地层 DB + 竖井保留区）----
             int center = WorldWidth / 2;   // 24
@@ -110,11 +111,21 @@ namespace Ashfall.EditorTools
             gm.startingCash = 100;
 
             // ---- 5. 地表基地：返航判定 + 出售 + 燃料 ----
+            // 整个地表活动带统一维护 IsAtSurface。否则玩家离开中央登陆区去 Sell/Fuel 时会在地表误开 Run。
+            var hubZoneGo = new GameObject("SurfaceHubZone");
+            hubZoneGo.transform.position = new Vector3(center, -1f, 0f);
+            var hubZoneCollider = hubZoneGo.AddComponent<BoxCollider2D>();
+            hubZoneCollider.isTrigger = true;
+            hubZoneCollider.size = new Vector2(WorldWidth, 5f); // y = 1.5 .. -3.5；下到深度 3 后才离开地表
+            hubZoneGo.AddComponent<SurfaceHubZone>();
+
             var surfaceGo = new GameObject("SurfaceBase");
             surfaceGo.transform.position = new Vector3(spawnX, -0.5f, 0f);
             var sb = surfaceGo.AddComponent<BoxCollider2D>();
             sb.isTrigger = true; sb.size = new Vector2(9f, 3f);
-            surfaceGo.AddComponent<SurfaceBase>();
+            var surfaceBase = surfaceGo.AddComponent<SurfaceBase>();
+            surfaceBase.autoSellCargo = false;
+            surfaceBase.enableAutoService = false;
 
             // 出售终端（地表 x 偏左）
             var sellGo = new GameObject("SellTerminal");
@@ -143,6 +154,13 @@ namespace Ashfall.EditorTools
 
             // ---- 7. 保存 ----
             EditorSceneManager.SaveScene(scene, ScenePath);
+            var buildScenes = EditorBuildSettings.scenes;
+            if (!Array.Exists(buildScenes, entry => entry.path == ScenePath))
+            {
+                Array.Resize(ref buildScenes, buildScenes.Length + 1);
+                buildScenes[buildScenes.Length - 1] = new EditorBuildSettingsScene(ScenePath, true);
+                EditorBuildSettings.scenes = buildScenes;
+            }
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
             Selection.activeGameObject = playerGo;
