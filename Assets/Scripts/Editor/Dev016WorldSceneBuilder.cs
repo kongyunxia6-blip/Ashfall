@@ -4,6 +4,7 @@ using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.Tilemaps;
+using Spine.Unity;
 
 namespace Ashfall.EditorTools
 {
@@ -93,12 +94,13 @@ namespace Ashfall.EditorTools
             rb.collisionDetectionMode = CollisionDetectionMode2D.Continuous;
             var circle = playerGo.AddComponent<CircleCollider2D>();
             circle.radius = 0.36f;
-            playerGo.AddComponent<SpriteRenderer>();
-            playerGo.AddComponent<PlayerVisual>();
+            AddPlayerVisual(playerGo);
             var vehicle = playerGo.AddComponent<DrillVehicle>();
             vehicle.grid = digGrid;
             vehicle.startMode = DrillVehicle.MovementMode.Hover;
             vehicle.startJetting = false;
+            var miningFeel = playerGo.AddComponent<MiningFeelController>();
+            miningFeel.grid = digGrid;
 
             // ---- 4. 总控（对齐 EconomyBalanceV1Test 权威 GameManager 配置）----
             // DEV-011/DEV-016：补 RunRiskState + DepthRegionProgression + EquipmentProgression + BlockDropHook，
@@ -179,6 +181,30 @@ namespace Ashfall.EditorTools
                       $"  48×{WorldDepth} · 5 地层岩色（soil/normal/dense/granite/basalt）· 竖井保留区 中央 x={spawnX}\n" +
                       "  挂 OreVeinGenerator + OreRegionPreset_Strata（按地层带叠矿）。点 Play 可下潜挖矿。\n" +
                       "  （未覆盖 Game.unity）");
+        }
+
+        static void AddPlayerVisual(GameObject playerGo)
+        {
+            const string skeletonPath = "Assets/Art/Characters/Player/Spine/PlayerMiner_SkeletonData.asset";
+            var skeletonData = AssetDatabase.LoadAssetAtPath<SkeletonDataAsset>(skeletonPath);
+            if (skeletonData == null)
+            {
+                playerGo.AddComponent<SpriteRenderer>();
+                playerGo.AddComponent<PlayerVisual>();
+                Debug.LogWarning($"[DEV-016] 未找到玩家 Spine 资产，暂用圆点占位：{skeletonPath}");
+                return;
+            }
+
+            var visualGo = new GameObject("PlayerSpineVisual");
+            visualGo.transform.SetParent(playerGo.transform, false);
+            visualGo.transform.localPosition = new Vector3(0f, -0.35f, 0f);
+            visualGo.transform.localScale = Vector3.one * 0.45f;
+
+            var skeleton = SkeletonAnimation.AddToGameObject(visualGo, skeletonData);
+            skeleton.loop = true;
+            skeleton.AnimationName = PlayerSpineVisual.IdleAnimation;
+            skeleton.GetComponent<MeshRenderer>().sortingOrder = 10;
+            visualGo.AddComponent<PlayerSpineVisual>();
         }
     }
 }
