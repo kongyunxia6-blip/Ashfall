@@ -56,8 +56,10 @@ namespace Ashfall
 
             Vector2 velocity = body.linearVelocity;
             bool isMining = mining != null && mining.enabled && mining.IsMining;
-            if (isMining && mining.CurrentDirection.x != 0)
-                facing = Mathf.Sign(mining.CurrentDirection.x);
+            // DEV-018.1：挖矿期间朝向以 MiningFeelController.Facing 为权威（front/frontDown 都用它，
+            // S/下竖直挖不改变左右朝向），避免竖直挖矿时被速度抖动改面；非挖矿沿用移动速度朝向。
+            if (isMining)
+                facing = Mathf.Sign(mining.Facing);
             else if (Mathf.Abs(velocity.x) > moveThreshold)
                 facing = Mathf.Sign(velocity.x);
             skeletonAnimation.Skeleton.ScaleX = Mathf.Abs(skeletonAnimation.Skeleton.ScaleX) * facing;

@@ -4,23 +4,26 @@ using UnityEngine;
 namespace Ashfall
 {
     /// <summary>
-    /// DEV-003：单格采矿交互与挖掘手感 V1。
+    /// DEV-003 / DEV-018.1：着地限定的「前方双格」单格采矿交互与挖掘手感。
     ///
-    /// 职责（只做「输入 → 单格目标 → 命中节奏」，不碰 Block 数据层）：
-    ///  - 4 方向单格目标锁定：同一输入只解析出 1 个相邻目标格，带换向/锁格双重迟滞防抖动；
-    ///  - 按住连续挖掘：攻击间隔门控，一次攻击 tick 最多调一次 DigGrid.HitBlock；
-    ///    当前格消失后方向保持则自动锁到紧邻下一格；释放输入立即停止；
-    ///  - 挖掘节奏参数集中在本组件（attackInterval / hitStop / recovery / breakExtraPause）；
-    ///  - 单格命中手感：极短 hit-stop（冻结载具速度，不动 Time.timeScale、不影响 MovementMode），
-    ///    Break 那一下 hit-stop × 倍率 + 追加 breakExtraPause，更有重量但不整屏震动；
-    ///  - 轻量目标提示：只高亮当前目标 1 格（描边 overlay，不遮挡裂纹 Sprite），H 键开关；
-    ///  - 工具效率接口：miningSpeedMultiplier × UpgradeSystem.DrillSpeedMultiplier，
-    ///    未来升级只让挖掘更快，永远只 Hit 1 个 Block。
+    /// 职责（只做「着地判定 → 前方目标解析 → 命中节奏」，不碰 Block 数据层）：
+    ///  - 【DEV-018.1】只在稳定着地时挖矿：以 DrillVehicle.Grounded 为着地权威，
+    ///    Jetting==true 或离地即禁止锁定 / 挖矿动画 / 命中（离地当帧清目标与高亮，无空中宽限）。
+    ///  - 【DEV-018.1】每个朝向只有前方竖排两格合法：front（身体/镐头同高正前方格）
+    ///    与 frontDown（front 正下方一格）；面向由最近一次有效左右输入决定的权威 Facing 判定；
+    ///    正上 / 身后 / 正脚下 / 斜上 / 两格以外全部不可挖。
+    ///  - 【DEV-018.1】输入映射：A/左、D/右 只请求对应朝向 front（front 空也不自动改挖 frontDown）；
+    ///    S/下 请求当前朝向 frontDown，但 front 仍实心时先锁挖 front；W/上 或空输入不挖。
+    ///  - 按住连续挖掘：攻击间隔门控，一次攻击 tick 最多调一次 DrillVehicle.TryDigHit；
+    ///    命中节奏参数集中在本组件（attackInterval / hitStop / recovery / breakExtraPause）。
+    ///  - 单格命中手感：极短 hit-stop（冻结载具速度，不动 Time.timeScale、不影响 MovementMode）；
+    ///    轻量目标提示：只高亮当前目标 1 格（描边 overlay），H 键开关；
+    ///    工具效率接口：EffectiveMultiplier × equipment/upgrades 钻速，未来升级只让挖掘更快。
     ///
-    /// 设计规则（对齐 Issue #6）：
+    /// 设计规则（对齐 Issue #6 + DEV-018.1 玩法规则）：
     ///  - 耐久 / Breaking / 裂纹阶段仍以 DigGrid 为唯一真相源，本组件不维护第二套 HP；
     ///  - 命中路径复用 DrillVehicle.TryDigHit（硬度检查 + HUD 进度 + 燃料），不复制挖掘逻辑；
-    ///  - 不实现任何 AoE / 范围挖掘。
+    ///  - 不实现任何 AoE / 范围挖掘；同输入只解析 0 或 1 个相邻目标格。
     ///
     /// 挂载：玩家物体（与 DrillVehicle 同物体）。存在且 enabled 时，DrillVehicle 的
     /// 单击挖掘会让位给本组件（单击 = 短按住，走同一状态机）。
@@ -54,12 +57,9 @@ namespace Ashfall
         [Tooltip("是否叠加 UpgradeSystem.DrillSpeedMultiplier（引擎等级带来的既有钻速成长）")]
         public bool useUpgradeDrillSpeed = true;
 
-        [Header("目标锁定（防抖动）")]
-        [Tooltip("换向迟滞：新方向主轴强度须达到该值才切换方向（防斜按/抖动导致目标在相邻格之间乱跳）")]
-        [Range(0.1f, 0.9f)] public float directionSwitchThreshold = 0.45f;
-
-        [Tooltip("锁定格最大邻接距离（世界单位）：锁定格中心与玩家任一轴距离超过它就放弃锁定重选")]
-        [Min(0.6f)] public float maxTargetDistance = 1.65f;
+        [Header("目标解析阈值")]
+        [Tooltip("方向输入死区：|x| 或 |y| 低于它视为无该轴输入（防按键噪声触发挖矿）")]
+        [Range(0.05f, 0.5f)] public float directionDeadZone = 0.2f;
 
         [Header("目标提示（轻量 V1，H 键开关）")]
         [Tooltip("是否显示单格目标描边提示。运行中可按 H 切换")]
@@ -73,10 +73,20 @@ namespace Ashfall
         /// <summary>当前锁定的目标格（null = 无有效目标）。一次只会有 0 或 1 个。</summary>
         public Vector2Int? CurrentTarget { get; private set; }
 
-        /// <summary>当前锁定的 4 方向（世界空间，zero = 无方向输入）。注意 DigGrid 网格 y 向下为正，用网格坐标时需 y 取反。</summary>
+        /// <summary>
+        /// 当前挖掘请求方向（世界空间，zero = 无有效挖掘请求）。
+        /// front 挖掘 = (±1, 0)；frontDown 挖掘 = (0, -1)。注意 DigGrid 网格 y 向下为正。
+        /// 仅供诊断/提示读取；目标真正由 Facing + 实心度解析，不直接用本值当偏移。
+        /// </summary>
         public Vector2Int CurrentDirection => currentDir;
 
-        /// <summary>是否正在采矿（按住输入且有有效目标）。</summary>
+        /// <summary>
+        /// 权威水平朝向（+1 右 / -1 左）。只由最近一次有效左右输入更新；S/W 竖直键不改变朝向。
+        /// front / frontDown 都相对本朝向判定，挖矿动画朝向也以此为准。
+        /// </summary>
+        public int Facing { get; private set; } = 1;
+
+        /// <summary>是否正在采矿（稳定着地 + 按住输入 + 有有效目标）。</summary>
         public bool IsMining { get; private set; }
 
         /// <summary>实际生效的工具效率倍率（含升级/装备系统；永远只 Hit 单格）。</summary>
@@ -111,8 +121,7 @@ namespace Ashfall
         /// <summary>DEV-010：装备成长权威组件（可空 → 空则沿用旧 UpgradeSystem 钻速倍率）。</summary>
         EquipmentProgression equipment;
 
-        Vector2Int currentDir = Vector2Int.zero;   // 锁定的 4 方向
-        Vector2Int? lockedCell;                    // 迟滞锁定格（部分挖掘过的格不随便换）
+        Vector2Int currentDir = Vector2Int.zero;   // 当前挖掘请求方向（front = (±1,0)；frontDown = (0,-1)）
         float nextHitTime;                         // 攻击间隔门控（一次 tick 最多一击的唯一闸门）
         float hitStopUntil;                        // hit-stop 窗口
         bool heldLastFrame;                        // 释放检测（立即停止）
@@ -150,6 +159,7 @@ namespace Ashfall
         {
             if (vehicle == null || grid == null || vehicle.IsDead)
             {
+                CurrentTarget = null;
                 UpdateHighlight(null);
                 IsMining = false;
                 return;
@@ -184,8 +194,11 @@ namespace Ashfall
         }
 
         /// <summary>
-        /// 一帧的采矿状态机：方向解析 → 单格目标解析 → 高亮 → 攻击门控命中。
+        /// 一帧的采矿状态机：着地判定 → 朝向 → 前方目标解析 → 高亮 → 攻击门控命中。
         /// Update 每帧调用；测试驱动同步调用一次保证状态即时就位（不依赖帧调度）。
+        ///
+        /// DEV-018.1 着地权威：只有稳定着地（vehicle.Grounded && !vehicle.Jetting）才能
+        /// 锁定/高亮/命中；离地当帧清 CurrentTarget 与高亮、IsMining=false，无空中宽限。
         /// </summary>
         void TickMining(Vector2 raw, bool held)
         {
@@ -193,17 +206,31 @@ namespace Ashfall
             if (!held && heldLastFrame) IsMining = false;
             heldLastFrame = held;
 
-            // ---- 2. 方向解析（带换向迟滞） ----
-            UpdateDirection(raw);
+            // ---- 朝向权威：只由最近一次有效左右输入决定（S/W 竖直键不改左右朝向）----
+            if (raw.x > directionDeadZone) Facing = 1;
+            else if (raw.x < -directionDeadZone) Facing = -1;
 
-            // ---- 3. 单格目标解析（严格相邻 + 锁格迟滞） ----
+            // ---- 挖掘请求方向（front = 水平；frontDown = 竖直向下）----
+            currentDir = ComputeDigRequest(raw);
+
+            // ---- 1. 着地判定（权威 Gate）：离地/喷气 = 不可挖，立即清目标与高亮 ----
+            bool stanceOk = vehicle != null && vehicle.Grounded && !vehicle.Jetting;
+            if (!stanceOk)
+            {
+                CurrentTarget = null;
+                UpdateHighlight(null);
+                IsMining = false;
+                return;                              // 不产生任何目标/高亮/命中
+            }
+
+            // ---- 2. 前方单格目标解析（front 优先 frontDown；front 空不自动下沉）----
             Vector2Int? target = ResolveTarget();
             CurrentTarget = target;
             UpdateHighlight(target);
 
             IsMining = held && target != null;
 
-            // ---- 4. 攻击门控：一次 tick 最多一次 HitBlock ----
+            // ---- 3. 攻击门控：一次 tick 最多一次 HitBlock ----
             if (!IsMining) return;
             if (Time.time < nextHitTime) return;
 
@@ -220,8 +247,9 @@ namespace Ashfall
             }
             else if (res == DigHitResult.NotSolid)
             {
-                // 目标在命中瞬间失效（如被落石/其他系统移走）：清锁定，下帧重选
-                lockedCell = null;
+                // 目标在命中瞬间失效（如被落石/其他系统移走）：清目标，下帧重选
+                CurrentTarget = null;
+                UpdateHighlight(null);
             }
             // HardnessLow：提示由 TryDigHit 内部刷了，给一个退避避免每帧刷
             else if (res == DigHitResult.HardnessLow)
@@ -251,81 +279,62 @@ namespace Ashfall
         }
 
         /// <summary>
-        /// 把原始输入解析成唯一 4 方向。规则：
-        ///  - 双轴都有输入时取【主轴】（|x|>|y| 取水平，否则取竖直），同输入永远只出一个方向；
-        ///  - 已有方向时，新主轴强度须 ≥ directionSwitchThreshold 才换向（迟滞防跳）。
+        /// 把原始输入解析成唯一「挖掘请求方向」（世界空间）。
+        /// DEV-018.1 映射（front/frontDown 相对 Facing）：
+        ///  - 水平主轴（|x|>|y|）→ front：返回 (±1, 0)，符号 = 该轴水平方向；
+        ///  - 竖直向下（|y|>|x| 且 y<0，即 S/下）→ frontDown：返回 (0, -1)；
+        ///  - W/上、死区内、或水平竖直强度相等（歧义）→ 返回 zero（不挖）。
+        /// 朝向外改由 TickMining 从 raw.x 独立维护，这里不再决定左右。
         /// </summary>
-        void UpdateDirection(Vector2 raw)
+        Vector2Int ComputeDigRequest(Vector2 raw)
         {
             float ax = Mathf.Abs(raw.x), ay = Mathf.Abs(raw.y);
-            if (ax < 0.2f && ay < 0.2f)
-            {
-                currentDir = Vector2Int.zero;   // 松开方向键 = 无方向（目标随之隐藏）
-                return;
-            }
+            if (ax < directionDeadZone && ay < directionDeadZone)
+                return Vector2Int.zero;             // 无有效方向输入 → 不挖
 
-            Vector2Int newDir = ax > ay
-                ? (raw.x > 0f ? Vector2Int.right : Vector2Int.left)
-                : (raw.y > 0f ? Vector2Int.up : Vector2Int.down);
+            if (ax > ay)                            // 水平主轴 → front（面前格）
+                return new Vector2Int(raw.x > 0f ? 1 : -1, 0);
 
-            if (currentDir == Vector2Int.zero || newDir == currentDir)
-            {
-                currentDir = newDir;
-                return;
-            }
+            if (ay > ax && raw.y < 0f)              // S/下 → frontDown（面前下方格）
+                return new Vector2Int(0, -1);
 
-            float strength = newDir.x != 0 ? ax : ay;
-            if (strength >= directionSwitchThreshold)
-                currentDir = newDir;
+            return Vector2Int.zero;                  // W/上、或水平竖直等强歧义 → 不挖
         }
 
-        // ---------- 单格目标解析 ----------
+        // ---------- 前方单格目标解析 ----------
 
         /// <summary>
-        /// 解析当前目标格。规则：
-        ///  - 新目标严格 = 玩家所在格 + 当前方向（只此 1 格，绝不打斜对角或第二格）；
-        ///  - 若锁定格（挖了一半的格）仍实心、仍在邻接距离内、且仍在当前方向轴上，
-        ///    继续保持锁定 —— 玩家踩在格边界轻微抖动时目标不在相邻格之间跳；
-        ///  - 当前方向无可挖 Block → 返回 null（目标提示隐藏），不外扩搜索。
+        /// 解析当前目标格（DEV-018.1：每个朝向只有前方竖排两格合法）。
+        ///  - pc = 玩家身体所在格（WorldToGrid 世界坐标）；
+        ///  - front  = pc + (Facing, 0) —— 身体/镐头同高正前方格；
+        ///  - frontDown = pc + (Facing, +1) —— front 正下方一格（网格 y 向下为正）。
+        ///  规则：
+        ///   ・水平请求（front）：只锁 front；front 为空（空气/崩碎/界外）→ null，不自动改挖 frontDown；
+        ///   ・向下请求（frontDown）：front 仍实心 → 先锁 front；front 已清空 → 才锁 frontDown；
+        ///   ・正上 / 身后 / 正脚下 / 斜上 / 两格以外天然不在 front/frontDown 集合 → 永不选中；
+        ///   ・只解析 0 或 1 格，绝不多格 / AoE。
+        ///  目标由「Facing + 当前实心度」每帧确定性重算，无迟滞锁格 —— 但 DigGrid 耐久单调递减，
+        ///  实心未崩时同朝向每帧都锁同一格，等同稳定锁定。
         /// </summary>
         Vector2Int? ResolveTarget()
         {
             if (currentDir == Vector2Int.zero)
-            {
-                lockedCell = null;
-                return null;
-            }
+                return null;                        // 无有效挖掘请求
 
             Vector2Int pc = grid.WorldToGrid(transform.position);
-            // 世界方向 → 网格方向：DigGrid 网格 y 向下为正（越深越大），世界 y 向上为正，故 y 取反
-            Vector2Int gridDir = new Vector2Int(currentDir.x, -currentDir.y);
+            Vector2Int front = pc + new Vector2Int(Facing, 0);       // 面前格（身体同高）
 
-            if (lockedCell.HasValue)
+            if (currentDir.x != 0)
             {
-                Vector2Int lc = lockedCell.Value;
-                Vector3 lw = grid.GridToWorld(lc.x, lc.y);
-                bool near = Mathf.Abs(lw.x - transform.position.x) <= maxTargetDistance
-                         && Mathf.Abs(lw.y - transform.position.y) <= maxTargetDistance;
-                Vector2Int rel = lc - pc;
-                // 仍在方向轴上：沿挖掘方向分量仍朝前（允许横向偏移 1 格内的边界抖动，
-                // 但锁定格一旦脱离方向轴正前方 ±1 格带就放弃）
-                bool onAxis = gridDir.x != 0
-                    ? (rel.x == gridDir.x && Mathf.Abs(rel.y) <= 1)
-                    : (rel.y == gridDir.y && Mathf.Abs(rel.x) <= 1);
-
-                if (near && onAxis && IsCellValidTarget(lc))
-                    return lc;
-
-                lockedCell = null;
+                // 水平请求 → 只挖 front；front 空绝不自动改挖 frontDown
+                return IsCellValidTarget(front) ? front : (Vector2Int?)null;
             }
 
-            Vector2Int desired = pc + gridDir;
-            if (IsCellValidTarget(desired))
-            {
-                lockedCell = desired;
-                return desired;
-            }
-            return null;
+            // 竖直向下请求 → frontDown，但 front 仍实心时先挖 front
+            if (IsCellValidTarget(front))
+                return front;
+            Vector2Int frontDown = pc + new Vector2Int(Facing, 1);
+            return IsCellValidTarget(frontDown) ? frontDown : (Vector2Int?)null;
         }
 
         /// <summary>该格是否可作为挖掘目标：实心、在界内、且不在崩碎中（崩碎中不可重复 Hit）。</summary>
