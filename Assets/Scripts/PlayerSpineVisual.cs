@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Spine.Unity;
 using UnityEngine;
 
@@ -22,11 +23,16 @@ namespace Ashfall
         [Header("Animation thresholds")]
         [Min(0f)] public float moveThreshold = 0.08f;
         [Min(0f)] public float airborneSpeedThreshold = 0.12f;
+        [Range(0f, 0.5f)] public float transitionDuration = 0.12f;
+
+        public string CurrentAnimation => currentAnimation;
+        public float Facing => facing;
 
         SkeletonAnimation skeletonAnimation;
         Rigidbody2D body;
         string currentAnimation;
         float facing = 1f;
+        readonly HashSet<string> reportedMissingAnimations = new HashSet<string>();
 
         void Awake()
         {
@@ -37,6 +43,8 @@ namespace Ashfall
         void Start()
         {
             skeletonAnimation.Initialize(false);
+            if (skeletonAnimation.valid)
+                skeletonAnimation.SkeletonDataAsset.GetAnimationStateData().DefaultMix = transitionDuration;
             Play(IdleAnimation, true);
         }
 
@@ -47,11 +55,13 @@ namespace Ashfall
                 return;
 
             Vector2 velocity = body.linearVelocity;
-            if (Mathf.Abs(velocity.x) > moveThreshold)
+            bool isMining = mining != null && mining.enabled && mining.IsMining;
+            if (isMining && mining.CurrentDirection.x != 0)
+                facing = Mathf.Sign(mining.CurrentDirection.x);
+            else if (Mathf.Abs(velocity.x) > moveThreshold)
                 facing = Mathf.Sign(velocity.x);
             skeletonAnimation.Skeleton.ScaleX = Mathf.Abs(skeletonAnimation.Skeleton.ScaleX) * facing;
 
-            bool isMining = mining != null && mining.enabled && mining.IsMining;
             bool isFlying = !isMining && (vehicle.Jetting || (!vehicle.Grounded && velocity.sqrMagnitude > airborneSpeedThreshold * airborneSpeedThreshold));
             bool isWalking = !isMining && !isFlying && Mathf.Abs(velocity.x) > moveThreshold;
 
@@ -76,7 +86,10 @@ namespace Ashfall
 
             if (skeletonAnimation.Skeleton.Data.FindAnimation(animationName) == null)
             {
-                Debug.LogWarning($"[PlayerSpineVisual] Missing Spine animation: {animationName}", this);
+                if (reportedMissingAnimations.Add(animationName))
+                    Debug.LogError($"[PlayerSpineVisual] Missing Spine animation: {animationName}", this);
+                if (animationName != IdleAnimation)
+                    Play(IdleAnimation, true);
                 return;
             }
 
