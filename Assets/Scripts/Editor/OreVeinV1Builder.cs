@@ -25,7 +25,7 @@ namespace Ashfall.EditorTools
     /// </summary>
     public static class OreVeinV1Builder
     {
-        const string ScenePath = "Assets/Scenes/OreVeinV1Test.unity";
+        const string ScenePath = "Assets/Scenes/Tests/OreVeinV1Test.unity";
         const string SceneFolder = "Assets/Scenes";
         const string DataFolder = "Assets/Ashfall/Data";
 

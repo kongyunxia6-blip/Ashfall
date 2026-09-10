@@ -13,7 +13,7 @@ namespace Ashfall.EditorTools
     /// </summary>
     public static class StrataArtShowcaseV1Builder
     {
-        const string ScenePath = "Assets/Scenes/StrataArtShowcaseV1.unity";
+        const string ScenePath = "Assets/Scenes/Showcase/StrataArtShowcaseV1.unity";
         const string BlockRoot = "Assets/Art/Environment/Blocks";
         const string EdgeSpritePath = BlockRoot + "/bedrock/bedrock_edge_intact.png";
         const string BedrockAssetPath = "Assets/Ashfall/Data/Bedrock.asset";

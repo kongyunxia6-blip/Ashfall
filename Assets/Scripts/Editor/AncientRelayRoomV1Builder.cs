@@ -24,7 +24,7 @@ namespace Ashfall.EditorTools
     /// </summary>
     public static class AncientRelayRoomV1Builder
     {
-        const string ScenePath = "Assets/Scenes/AncientRelayRoomV1Test.unity";
+        const string ScenePath = "Assets/Scenes/Tests/AncientRelayRoomV1Test.unity";
         const string SceneFolder = "Assets/Scenes";
         const string DataFolder = "Assets/Ashfall/Data";
 

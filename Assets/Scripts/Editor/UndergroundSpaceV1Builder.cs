@@ -28,7 +28,7 @@ namespace Ashfall.EditorTools
     /// </summary>
     public static class UndergroundSpaceV1Builder
     {
-        const string ScenePath = "Assets/Scenes/UndergroundSpaceV1Test.unity";
+        const string ScenePath = "Assets/Scenes/Tests/UndergroundSpaceV1Test.unity";
         const string SceneFolder = "Assets/Scenes";
         const string DataFolder = "Assets/Ashfall/Data";
 

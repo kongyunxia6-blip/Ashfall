@@ -23,7 +23,7 @@ namespace Ashfall.EditorTools
     /// </summary>
     public static class MiningFeelV1Builder
     {
-        const string ScenePath = "Assets/Scenes/MiningFeelV1Test.unity";
+        const string ScenePath = "Assets/Scenes/Tests/MiningFeelV1Test.unity";
         const string SceneFolder = "Assets/Scenes";
         const string DataFolder = "Assets/Ashfall/Data";
 

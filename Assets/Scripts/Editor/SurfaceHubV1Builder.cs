@@ -26,7 +26,7 @@ namespace Ashfall.EditorTools
     /// </summary>
     public static class SurfaceHubV1Builder
     {
-        const string ScenePath = "Assets/Scenes/SurfaceHubV1Test.unity";
+        const string ScenePath = "Assets/Scenes/Tests/SurfaceHubV1Test.unity";
         const string SceneFolder = "Assets/Scenes";
         const string DataFolder = "Assets/Ashfall/Data";
         const string BackgroundFolder = "Assets/Art/Environment/Backgrounds/SurfaceHub";

@@ -6,57 +6,6 @@ EditorBuildSettings:
   serializedVersion: 2
   m_Scenes:
   - enabled: 1
-    path: Assets/Scenes/Game.unity
-    guid: b5e254716ec0f7c4faf570bc2aebcf2a
-  - enabled: 1
-    path: Assets/Scenes/TestMining.unity
-    guid: fe062ccc13c9ef74a9766120d8a5bdce
-  - enabled: 1
-    path: Assets/Scenes/WalkTest.unity
-    guid: 3432c534389c8b94f89b9b7e0d09690f
-  - enabled: 1
-    path: Assets/Scenes/BlockV1Test.unity
-    guid: d545d5e9d6e1b444f93478cc27bfeb0d
-  - enabled: 1
-    path: Assets/Scenes/BlockV2Test.unity
-    guid: 56d18c4487f4f894c928ec59d1a4e96a
-  - enabled: 1
-    path: Assets/Scenes/MiningFeelV1Test.unity
-    guid: b7ca639687f97394badeb78033e2ed5d
-  - enabled: 1
-    path: Assets/Scenes/SupportRockV1Test.unity
-    guid: 49342f1af88c515439e894157a250407
-  - enabled: 1
-    path: Assets/Scenes/CoreLoopV1Test.unity
-    guid: 0632864766fdb864bb99ebcae7604154
-  - enabled: 1
-    path: Assets/Scenes/SurfaceHubV1Test.unity
-    guid: 0dc7bd311a15fae4c8aeca6ef770d625
-  - enabled: 1
-    path: Assets/Scenes/OreVeinV1Test.unity
-    guid: dc36766732ac569419bb20457149ba08
-  - enabled: 1
-    path: Assets/Scenes/UndergroundSpaceV1Test.unity
-    guid: dc68901f7c211f2409686aed96db3856
-  - enabled: 1
-    path: Assets/Scenes/DepthRegionV1Test.unity
-    guid: b1abbb41c85a4c7479f7763d50d4a81d
-  - enabled: 1
-    path: Assets/Scenes/EquipmentProgressionV1Test.unity
-    guid: eed5df72e1566024988a34d83a67484c
-  - enabled: 1
-    path: Assets/Scenes/RiskExtractionV1Test.unity
-    guid: e7519f05c7f0c3c488722a2d4af57e02
-  - enabled: 1
-    path: Assets/Scenes/BlockFrameworkV1Test.unity
-    guid: fbdae5c0269a26b4cb6060820aefac5c
-  - enabled: 1
-    path: Assets/Scenes/AncientRelayRoomV1Test.unity
-    guid: 418b817f683c4e54ca7ecd88cccc9f1c
-  - enabled: 1
-    path: Assets/Scenes/DiscoveryNodeV1Test.unity
-    guid: 6ada5b90fff8fe641a1e454cd5dfafcb
-  - enabled: 1
     path: Assets/Scenes/WorldGenV1.unity
     guid: 5ce6a7756ae9a9e408eba5554d9712f6
   m_configObjects:

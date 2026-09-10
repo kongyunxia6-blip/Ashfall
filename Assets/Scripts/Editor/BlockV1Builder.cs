@@ -21,7 +21,7 @@ namespace Ashfall.EditorTools
     /// </summary>
     public static class BlockV1Builder
     {
-        const string ScenePath = "Assets/Scenes/BlockV1Test.unity";
+        const string ScenePath = "Assets/Scenes/Tests/BlockV1Test.unity";
         const string SceneFolder = "Assets/Scenes";
         const string DataFolder = "Assets/Ashfall/Data";
 

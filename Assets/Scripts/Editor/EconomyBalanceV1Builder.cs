@@ -21,7 +21,7 @@ namespace Ashfall.EditorTools
     /// </summary>
     public static class EconomyBalanceV1Builder
     {
-        const string ScenePath = "Assets/Scenes/EconomyBalanceV1Test.unity";
+        const string ScenePath = "Assets/Scenes/Tests/EconomyBalanceV1Test.unity";
         const string SceneFolder = "Assets/Scenes";
         const string DataFolder = "Assets/Ashfall/Data";
 
