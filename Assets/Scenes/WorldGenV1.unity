@@ -26,7 +26,7 @@ RenderSettings:
   m_AmbientIntensity: 1
   m_AmbientMode: 0
   m_SubtractiveShadowColor: {r: 0.42, g: 0.478, b: 0.627, a: 1}
-  m_SkyboxMaterial: {fileID: 10304, guid: 0000000000000000f000000000000000, type: 0}
+  m_SkyboxMaterial: {fileID: 0}
   m_HaloStrength: 0.5
   m_FlareStrength: 1
   m_FlareFadeSpeed: 3
@@ -416,7 +416,7 @@ GameObject:
   m_Component:
   - component: {fileID: 581345881}
   - component: {fileID: 581345885}
-  - component: {fileID: 581345884}
+  - component: {fileID: 581345886}
   - component: {fileID: 581345883}
   - component: {fileID: 581345882}
   m_Layer: 0
@@ -462,8 +462,7 @@ MonoBehaviour:
   breakHitStopMultiplier: 2
   miningSpeedMultiplier: 1
   useUpgradeDrillSpeed: 1
-  directionSwitchThreshold: 0.45
-  maxTargetDistance: 1.65
+  directionDeadZone: 0.2
   showTargetHighlight: 1
   highlightColor: {r: 1, g: 0.9, b: 0.2, a: 0.85}
 --- !u!114 &581345883
@@ -486,8 +485,8 @@ MonoBehaviour:
   startJetting: 0
   hoverAccel: 14
   hoverDecel: 10
-  walkAccel: 25
-  walkFriction: 30
+  walkAccel: 20
+  walkFriction: 80
   airControl: 0.55
   groundProbe: 0.06
   hardLandingSpeed: 5
@@ -506,8 +505,35 @@ MonoBehaviour:
   weightClimbPenalty: 0.45
   weightFuelPenalty: 0.35
   messageThrottle: 1.5
---- !u!58 &581345884
-CircleCollider2D:
+--- !u!50 &581345885
+Rigidbody2D:
+  serializedVersion: 5
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 581345880}
+  m_BodyType: 0
+  m_Simulated: 1
+  m_UseFullKinematicContacts: 0
+  m_UseAutoMass: 0
+  m_Mass: 1
+  m_LinearDamping: 0
+  m_AngularDamping: 0.05
+  m_GravityScale: 0
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_Interpolate: 1
+  m_SleepingMode: 1
+  m_CollisionDetection: 1
+  m_Constraints: 4
+--- !u!61 &581345886
+BoxCollider2D:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
@@ -540,35 +566,18 @@ CircleCollider2D:
   m_UsedByEffector: 0
   m_CompositeOperation: 0
   m_CompositeOrder: 0
-  m_Offset: {x: 0, y: 0}
-  m_Radius: 0.36
---- !u!50 &581345885
-Rigidbody2D:
-  serializedVersion: 5
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 581345880}
-  m_BodyType: 0
-  m_Simulated: 1
-  m_UseFullKinematicContacts: 0
-  m_UseAutoMass: 0
-  m_Mass: 1
-  m_LinearDamping: 0
-  m_AngularDamping: 0.05
-  m_GravityScale: 0
-  m_Material: {fileID: 0}
-  m_IncludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_ExcludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_Interpolate: 1
-  m_SleepingMode: 1
-  m_CollisionDetection: 1
-  m_Constraints: 4
+  m_Offset: {x: 0.03, y: 0.38}
+  m_SpriteTilingProperty:
+    border: {x: 0, y: 0, z: 0, w: 0}
+    pivot: {x: 0, y: 0}
+    oldSize: {x: 0, y: 0}
+    newSize: {x: 0, y: 0}
+    adaptiveTilingThreshold: 0
+    drawMode: 0
+    adaptiveTiling: 0
+  m_AutoTiling: 0
+  m_Size: {x: 0.74, y: 1.48}
+  m_EdgeRadius: 0
 --- !u!1 &892818423
 GameObject:
   m_ObjectHideFlags: 0

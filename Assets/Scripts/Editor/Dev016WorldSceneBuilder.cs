@@ -101,8 +101,9 @@ namespace Ashfall.EditorTools
             rb.gravityScale = 0f; rb.freezeRotation = true;      // SetMovementMode 会覆写为 Walk 所需重力
             rb.interpolation = RigidbodyInterpolation2D.Interpolate;
             rb.collisionDetectionMode = CollisionDetectionMode2D.Continuous;
-            var circle = playerGo.AddComponent<CircleCollider2D>();
-            circle.radius = 0.36f;
+            var circle = playerGo.AddComponent<BoxCollider2D>();
+            circle.size = new Vector2(0.74f, 1.48f);
+            circle.offset = new Vector2(0.03f, 0.38f);
             var vehicle = playerGo.AddComponent<DrillVehicle>();
             vehicle.grid = digGrid;
             vehicle.startMode = DrillVehicle.MovementMode.Walk;  // DEV-018：地面行走进矿口 + 喷气返航

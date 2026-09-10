@@ -321,7 +321,7 @@ namespace Ashfall
             if (currentDir == Vector2Int.zero)
                 return null;                        // 无有效挖掘请求
 
-            Vector2Int pc = grid.WorldToGrid(transform.position);
+            Vector2Int pc = grid.WorldToGrid(vehicle.MiningFootPoint);
             Vector2Int front = pc + new Vector2Int(Facing, 0);       // 面前格（身体同高）
 
             if (currentDir.x != 0)

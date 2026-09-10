@@ -449,7 +449,7 @@ namespace Ashfall
         void WalkMove(Vector2 input, float speed)
         {
             float dt = Time.fixedDeltaTime;
-            float r = playerRadius;
+            float r = FootOffset;
 
             // 1. 落地探测：脚下 groundProbe 距离内有实心格顶面，且【不是正在明显下落】。
             //    vy > -0.5：站稳时 vy 每帧被清零、最多累积一帧重力约 -0.2；下落中很快跌破 -0.5。
@@ -522,7 +522,7 @@ namespace Ashfall
             // 直接顶回该格顶面之上。不依赖「中间安全点」，已入地也能自恢复，天然防高速穿地。
             if (grid != null && vy < 0f)
             {
-                float r = playerRadius;
+                float r = FootOffset;
                 float yLowNext = rb.position.y - r + vy * Time.fixedDeltaTime;
                 float topY = GroundTopAt(rb.position.x, yLowNext);
                 if (!float.IsNegativeInfinity(topY))
@@ -536,7 +536,7 @@ namespace Ashfall
 
             rb.linearVelocity = new Vector2(vx, vy);
             Grounded = grid != null && vy == 0f
-                && !float.IsNegativeInfinity(GroundTopAt(rb.position.x, rb.position.y - playerRadius - 0.02f));
+                && !float.IsNegativeInfinity(GroundTopAt(rb.position.x, rb.position.y - FootOffset - 0.02f));
             wasGrounded = Grounded;
         }
 
@@ -557,37 +557,46 @@ namespace Ashfall
         /// 不抬的话下角会误判穿进脚下格顶面 → 贴地水平移动被误当「卡墙」每帧清零
         /// （这正是「移动键没反应」的真根因，曾误诊为贴墙）。真墙是整格高，0.02 余量不会穿透。
         /// </summary>
+        // The collider is authoritative; visual scale does not change terrain geometry.
+        public Bounds TerrainBoundsAt(Vector2 position)
+        {
+            var box = GetComponent<BoxCollider2D>();
+            if (box != null && box.enabled)
+            {
+                Vector3 scale = transform.lossyScale;
+                Vector2 size = new Vector2(Mathf.Abs(box.size.x * scale.x), Mathf.Abs(box.size.y * scale.y));
+                Vector2 offset = new Vector2(box.offset.x * scale.x, box.offset.y * scale.y);
+                return new Bounds(position + offset, size);
+            }
+            return new Bounds(position, Vector2.one * (playerRadius * 2f));
+        }
+
+        float FootOffset => rb.position.y - TerrainBoundsAt(rb.position).min.y;
+        public Vector2 MiningFootPoint => new Vector2(TerrainBoundsAt(rb.position).center.x,
+            TerrainBoundsAt(rb.position).min.y + 0.05f);
+
         bool BlockedByTerrain(Vector2 center)
         {
-            float r = playerRadius;
-            const float groundSkin = 0.02f;
-            return grid.IsSolidAtWorld(center + new Vector2(-r, -r + groundSkin))
-                || grid.IsSolidAtWorld(center + new Vector2(r, -r + groundSkin))
-                || grid.IsSolidAtWorld(center + new Vector2(-r, r))
-                || grid.IsSolidAtWorld(center + new Vector2(r, r));
+            var bounds = TerrainBoundsAt(center);
+            var first = grid.WorldToGrid(new Vector2(bounds.min.x + 0.001f, bounds.max.y - 0.001f));
+            var last = grid.WorldToGrid(new Vector2(bounds.max.x - 0.001f, bounds.min.y + 0.02f));
+            for (int y = first.y; y <= last.y; y++)
+                for (int x = first.x; x <= last.x; x++)
+                    if (grid.IsSolid(x, y)) return true;
+            return false;
         }
 
-        /// <summary>
-        /// 落地探测：检查世界高度 yLow（玩家下缘）在水平 x 处是否已进入实心格。
-        /// 取 x-r / x / x+r 三个下缘点中【最浅】的阻挡格，返回其顶面世界 y（格 y 占世界
-        /// [-gy-1, -gy]，顶面 = -gy）；三处都未入地则返回 -Infinity。
-        /// 用三点是为了玩家半格悬空站在坑口/平台边缘时也能找到脚下真实支撑，不会卡墙。
-        /// </summary>
         float GroundTopAt(float x, float yLow)
         {
+            var bounds = TerrainBoundsAt(new Vector2(x, rb.position.y));
+            int left = grid.WorldToGrid(new Vector2(bounds.min.x + 0.001f, yLow)).x;
+            var end = grid.WorldToGrid(new Vector2(bounds.max.x - 0.001f, yLow));
             float best = float.NegativeInfinity;
-            for (int k = -1; k <= 1; k++)
-            {
-                Vector2Int c = grid.WorldToGrid(new Vector2(x + k * playerRadius, yLow));
-                if (grid.IsSolid(c.x, c.y))
-                {
-                    float top = -c.y;                 // 该实心格的顶面世界 y
-                    if (top > best) best = top;
-                }
-            }
+            for (int col = left; col <= end.x; col++)
+                if (grid.IsSolid(col, end.y))
+                    best = Mathf.Max(best, grid.GridToWorld(col, end.y).y + grid.CellSizeWorld.y * 0.5f);
             return best;
         }
-
         Vector2 ReadInput()
         {
             // DEV-008 真帧实测：测试驱动激活期间以驱动方向为移动输入（DebugDriveFor/Input 同源），
