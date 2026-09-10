@@ -337,9 +337,9 @@ MonoBehaviour:
   target: {fileID: 581345881}
   stiffness: 10
   zOffset: -10
-  orthoSize: 14
+  orthoSize: 3
   zoomStartDepth: 200
-  maxOrthoSize: 18
+  maxOrthoSize: 3
 --- !u!20 &270388834
 Camera:
   m_ObjectHideFlags: 0
@@ -375,7 +375,7 @@ Camera:
   far clip plane: 1000
   field of view: 60
   orthographic: 1
-  orthographic size: 14
+  orthographic size: 3
   m_Depth: 0
   m_CullingMask:
     serializedVersion: 2
@@ -847,7 +847,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: -0.35, z: 0}
-  m_LocalScale: {x: 0.45, y: 0.45, z: 0.45}
+  m_LocalScale: {x: 0.6, y: 0.6, z: 0.6}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 581345881}

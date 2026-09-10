@@ -105,7 +105,7 @@ namespace Ashfall.EditorTools
             for (int y = 0; y < digGrid.depth; y++)
                 for (int x = 0; x < digGrid.width; x++)
                 {
-                    var cell = new Vector3Int(x, -y, 0);
+                    var cell = new Vector3Int(x, -y - 1, 0);
                     bgTilemap.SetTile(cell, bgTile);
                     bgTilemap.SetTileFlags(cell, TileFlags.None);
                     bgTilemap.SetColor(cell, dirt != null ? dirt.color : new Color(0.3f, 0.25f, 0.2f));

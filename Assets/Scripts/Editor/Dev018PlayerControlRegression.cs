@@ -117,7 +117,16 @@ namespace Ashfall.EditorTools
                 Check(v.vehicle == p, "Spine_VehicleRef", "Spine driver 引用场景 DrillVehicle");
                 Check(v.mining == minings[0], "Spine_MiningRef", "Spine driver 引用场景 MiningFeelController");
                 Check(v.transform.IsChildOf(p.transform), "Spine_ChildOfPlayer", "Spine visual 是 Player 的子物体");
+                Check(Mathf.Abs(v.transform.localScale.x - 0.6f) < 0.001f,
+                    "Spine_DefaultScale06", $"角色默认视觉缩放=0.6（实际 {v.transform.localScale.x:F2}）");
             }
+
+            var camera = Camera.main;
+            var follow = camera != null ? camera.GetComponent<CameraFollow>() : null;
+            Check(camera != null && Mathf.Abs(camera.orthographicSize - 3f) < 0.001f,
+                "Camera_DefaultSize3", $"相机默认正交视野=3（实际 {(camera != null ? camera.orthographicSize : -1f):F2}）");
+            Check(follow != null && Mathf.Abs(follow.orthoSize - 3f) < 0.001f && Mathf.Abs(follow.maxOrthoSize - 3f) < 0.001f,
+                "CameraFollow_DefaultSize3", "CameraFollow 基础/最大视野均固定为 3");
 
             var gm = UnityEngine.Object.FindFirstObjectByType<GameManager>();
             if (gm != null)

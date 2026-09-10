@@ -258,7 +258,10 @@ namespace Ashfall
             if (tilemap == null) return;
 
             var def = GetTile(x, y);
-            var cell = new Vector3Int(x, -y, 0);
+            // 网格 y=0 的物理范围是世界 [-1, 0]，中心为 -0.5（见 GridToWorld）。
+            // Tilemap 单元 (x, -y) 却覆盖世界 [0, 1]，会令美术整体比权威碰撞高一格，
+            // 角色看起来站在首排土块底部。渲染单元下移一格，与物理/挖掘坐标完全重合。
+            var cell = new Vector3Int(x, -y - 1, 0);
 
             if (def == null || !def.isSolid)
             {
