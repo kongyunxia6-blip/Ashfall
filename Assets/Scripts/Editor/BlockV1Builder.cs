@@ -21,7 +21,7 @@ namespace Ashfall.EditorTools
     /// </summary>
     public static class BlockV1Builder
     {
-        const string ScenePath = "Assets/Scenes/BlockV1Test.unity";
+        const string ScenePath = "Assets/Scenes/Tests/BlockV1Test.unity";
         const string SceneFolder = "Assets/Scenes";
         const string DataFolder = "Assets/Ashfall/Data";
 
@@ -154,7 +154,7 @@ namespace Ashfall.EditorTools
             {
                 for (int x = 0; x < digGrid.width; x++)
                 {
-                    var cell = new Vector3Int(x, -y, 0);
+                    var cell = new Vector3Int(x, -y - 1, 0);
                     bgTilemap.SetTile(cell, bgTile);
                     // 再保险一次：清 cell flags 后 SetColor
                     bgTilemap.SetTileFlags(cell, TileFlags.None);

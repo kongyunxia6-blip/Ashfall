@@ -39,15 +39,15 @@ namespace Ashfall.EditorTools
         public const int AcceptanceSeed = 20260908;
 
         [MenuItem("灰烬之下/搭建 DEV-009 深度/区域推进测试场景")]
-        public static void Build() => BuildCore("Assets/Scenes/DepthRegionV1Test.unity", false, "DEV-009");
+        public static void Build() => BuildCore("Assets/Scenes/Tests/DepthRegionV1Test.unity", false, "DEV-009");
 
         [MenuItem("灰烬之下/搭建 DEV-010 装备成长+模块系统测试场景")]
         public static void BuildEquipmentProgressionV1()
-            => BuildCore("Assets/Scenes/EquipmentProgressionV1Test.unity", true, "DEV-010");
+            => BuildCore("Assets/Scenes/Tests/EquipmentProgressionV1Test.unity", true, "DEV-010");
 
         [MenuItem("灰烬之下/搭建 DEV-011 风险撤离测试场景")]
         public static void BuildRiskExtractionV1()
-            => BuildCore("Assets/Scenes/RiskExtractionV1Test.unity", true, "DEV-011", true);
+            => BuildCore("Assets/Scenes/Tests/RiskExtractionV1Test.unity", true, "DEV-011", true);
 
         /// <summary>
         /// 共用搭建核心。useEquipment = true → 挂 EquipmentProgression（四条线+模块，属性源切换）；
@@ -210,7 +210,7 @@ namespace Ashfall.EditorTools
             for (int y = 0; y < digGrid.depth; y++)
                 for (int x = 0; x < digGrid.width; x++)
                 {
-                    var cell = new Vector3Int(x, -y, 0);
+                    var cell = new Vector3Int(x, -y - 1, 0);
                     bgTilemap.SetTile(cell, bgTile);
                     bgTilemap.SetTileFlags(cell, TileFlags.None);
                     bgTilemap.SetColor(cell, dirt.color);

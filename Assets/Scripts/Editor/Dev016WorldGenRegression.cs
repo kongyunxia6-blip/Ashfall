@@ -210,10 +210,14 @@ namespace Ashfall.EditorTools
                         veinSizesValid = false;
                 }
 
-                var leftMatrix = tilemap.GetTransformMatrix(new Vector3Int(0, -10, 0));
-                var rightMatrix = tilemap.GetTransformMatrix(new Vector3Int(grid.Width - 1, -10, 0));
+                var leftMatrix = tilemap.GetTransformMatrix(new Vector3Int(0, -11, 0));
+                var rightMatrix = tilemap.GetTransformMatrix(new Vector3Int(grid.Width - 1, -11, 0));
+                bool renderMatchesPhysics = tilemap.GetTile(new Vector3Int(0, -1, 0)) != null
+                    && tilemap.GetTile(new Vector3Int(0, 0, 0)) == null
+                    && Mathf.Abs(grid.GridToWorld(0, 0).y + 0.5f) < 0.001f;
                 Assert(boundaryBedrock, "Generated_BedrockBoundary", "真实 48×640 生成后左右边界与底行全部为 canonical bedrock");
                 Assert(leftMatrix.m00 > 0f && rightMatrix.m00 < 0f, "Generated_BedrockMirror", "左边缘原向、右边缘水平镜像");
+                Assert(renderMatchesPhysics, "Generated_RenderMatchesPhysics", "第0层渲染在世界[-1,0]，与碰撞/挖掘坐标完全重合");
                 Assert(oreCells > 0 && cellsRespectBand, "Generated_OresRespectBands", $"真实生成矿格 {oreCells}，全部属于所在深度带允许矿种");
                 Assert(shaftHasNoOre, "Generated_ShaftReserved", "中央竖井保留区没有矿格");
                 Assert(veinSizesValid, "Generated_VeinSizes", $"真实生成矿脉 {generator.Veins.Count} 条，尺寸均满足各带 min/max");

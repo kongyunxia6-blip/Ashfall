@@ -23,7 +23,7 @@ namespace Ashfall.EditorTools
     /// </summary>
     public static class MiningFeelV1Builder
     {
-        const string ScenePath = "Assets/Scenes/MiningFeelV1Test.unity";
+        const string ScenePath = "Assets/Scenes/Tests/MiningFeelV1Test.unity";
         const string SceneFolder = "Assets/Scenes";
         const string DataFolder = "Assets/Ashfall/Data";
 
@@ -104,7 +104,7 @@ namespace Ashfall.EditorTools
             for (int y = 0; y < digGrid.depth; y++)
                 for (int x = 0; x < digGrid.width; x++)
                 {
-                    var cell = new Vector3Int(x, -y, 0);
+                    var cell = new Vector3Int(x, -y - 1, 0);
                     bgTilemap.SetTile(cell, bgTile);
                     bgTilemap.SetTileFlags(cell, TileFlags.None);
                     bgTilemap.SetColor(cell, dirt.color);

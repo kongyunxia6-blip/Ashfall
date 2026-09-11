@@ -101,8 +101,9 @@ namespace Ashfall.EditorTools
             rb.gravityScale = 0f; rb.freezeRotation = true;      // SetMovementMode 会覆写为 Walk 所需重力
             rb.interpolation = RigidbodyInterpolation2D.Interpolate;
             rb.collisionDetectionMode = CollisionDetectionMode2D.Continuous;
-            var circle = playerGo.AddComponent<CircleCollider2D>();
-            circle.radius = 0.36f;
+            var circle = playerGo.AddComponent<BoxCollider2D>();
+            circle.size = new Vector2(0.74f, 1.48f);
+            circle.offset = new Vector2(0.03f, 0.38f);
             var vehicle = playerGo.AddComponent<DrillVehicle>();
             vehicle.grid = digGrid;
             vehicle.startMode = DrillVehicle.MovementMode.Walk;  // DEV-018：地面行走进矿口 + 喷气返航
@@ -166,12 +167,12 @@ namespace Ashfall.EditorTools
             var camGo = new GameObject("Main Camera");
             camGo.tag = "MainCamera";
             var cam = camGo.AddComponent<Camera>();
-            cam.orthographic = true; cam.orthographicSize = 14f;
+            cam.orthographic = true; cam.orthographicSize = 3f;
             cam.transform.position = new Vector3(surfaceSpawnX + 0.5f, 1f, -10f);   // DEV-018：开局对准坑口右缘出生点
             cam.backgroundColor = new Color(0.05f, 0.05f, 0.08f);
             var follow = camGo.AddComponent<CameraFollow>();
             follow.target = playerGo.transform;
-            follow.orthoSize = 14f; follow.maxOrthoSize = 18f;
+            follow.orthoSize = 3f; follow.maxOrthoSize = 3f;
 
             // ---- 7. 保存 ----
             EditorSceneManager.SaveScene(scene, ScenePath);
@@ -207,7 +208,7 @@ namespace Ashfall.EditorTools
             var visualGo = new GameObject("PlayerSpineVisual");
             visualGo.transform.SetParent(playerGo.transform, false);
             visualGo.transform.localPosition = new Vector3(0f, -0.35f, 0f);
-            visualGo.transform.localScale = Vector3.one * 0.45f;
+            visualGo.transform.localScale = Vector3.one * 0.6f;
 
             var skeleton = SkeletonAnimation.AddToGameObject(visualGo, skeletonData);
             skeleton.loop = true;
